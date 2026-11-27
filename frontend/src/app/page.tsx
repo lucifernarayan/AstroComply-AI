@@ -4,14 +4,12 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
-  Search, Zap, AlertTriangle, Cpu, TrendingUp, Radio, Shield, 
-  ListCollapse, CheckCircle2, Clock, Settings, FileText, 
-  Building2, ShieldAlert, ChevronRight, Activity, Award
+  Search, Zap, AlertTriangle, Cpu, TrendingUp, Activity
 } from "lucide-react";
-import { riskGradient } from "@/utils/mosip-data";
 import type { SatelliteTrack } from "@/utils/mosip-data";
 import { GlobeWrapper } from "@/components/GlobeWrapper";
-import { getMetricsSummary, listSatellites, searchSatellites, type MetricsSummaryPayload, type SatelliteSummary } from "@/utils/api";
+import { elementEpoch, orbitGroundTrack, propagateElements } from "@/utils/orbit";
+import { listSatellites, searchSatellites, type SatelliteSummary } from "@/utils/api";
 
 /* ── Count-up Hook ─────────────────────────────────────────────────────────── */
 function useCountUp(target: number, duration = 2000, deps: unknown[] = []) {
@@ -33,13 +31,6 @@ function useCountUp(target: number, duration = 2000, deps: unknown[] = []) {
   return value;
 }
 
-function orbitBorder(orbit: SatelliteTrack["orbit"]) {
-  if (orbit === "LEO") return "border-[#00d4ff] text-[#00d4ff]";
-  if (orbit === "MEO") return "border-[#ffb700] text-[#ffb700]";
-  if (orbit === "GEO") return "border-[#00ff9d] text-[#00ff9d]";
-  return "border-white/20 text-white/40";
-}
-
 function parseVel(v: string): number {
   return parseFloat(v.replace(/[^\d.]/g, "")) || 0;
 }
@@ -49,108 +40,37 @@ function orbitType(value?: string | null): SatelliteTrack["orbit"] {
   return "LEO";
 }
 
-function propagateOrbit(noradId: number, altitudeKm: number, orbitType: string, timeMs: number) {
-  const R_earth = 6371; // Earth radius in km
-  const GM = 3.986004418e5; // km^3/s^2
-
-  let alt = altitudeKm;
-  if (!alt || alt <= 0) {
-    alt = orbitType === "GEO" ? 35786 : orbitType === "MEO" ? 20200 : 550;
-  }
-  const a = R_earth + alt;
-  const periodSec = 2 * Math.PI * Math.sqrt(Math.pow(a, 3) / GM);
-  const periodMs = periodSec * 1000;
-
-  const inclinationDeg = 30 + (noradId % 60); // 30 to 90 degrees
-  const inclinationRad = (inclinationDeg * Math.PI) / 180;
-  const raanDeg = (noradId * 13) % 360;
-  const raanRad = (raanDeg * Math.PI) / 180;
-
-  const timeSpeedup = 150;
-  const phase = ((timeMs * timeSpeedup) / periodMs) * 2 * Math.PI;
-
-  const x_orbit = a * Math.cos(phase);
-  const y_orbit = a * Math.sin(phase);
-
-  const x_eci = x_orbit * Math.cos(raanRad) - y_orbit * Math.sin(raanRad) * Math.cos(inclinationRad);
-  const y_eci = x_orbit * Math.sin(raanRad) + y_orbit * Math.cos(raanRad) * Math.cos(inclinationRad);
-  const z_eci = y_orbit * Math.sin(inclinationRad);
-
-  const r = Math.sqrt(x_eci * x_eci + y_eci * y_eci + z_eci * z_eci);
-  const lat = (Math.asin(z_eci / r) * 180) / Math.PI;
-  let lng = (Math.atan2(y_eci, x_eci) * 180) / Math.PI;
-
-  const earthRotationSpeed = 360 / (86164 * 1000);
-  const rotationAngle = (timeMs * timeSpeedup * earthRotationSpeed) % 360;
-  lng = ((lng - rotationAngle + 180) % 360) - 180;
-  if (lng < -180) lng += 360;
-
-  const vel = Math.sqrt(GM / a);
-
-  return { lat, lng, vel };
-}
-
-function generateOrbitPath(noradId: number, altitudeKm: number, orbitType: string, timeMs: number) {
-  const R_earth = 6371;
-  const GM = 3.986004418e5;
-
-  let alt = altitudeKm;
-  if (!alt || alt <= 0) {
-    alt = orbitType === "GEO" ? 35786 : orbitType === "MEO" ? 20200 : 550;
-  }
-  const a = R_earth + alt;
-  const periodSec = 2 * Math.PI * Math.sqrt(Math.pow(a, 3) / GM);
-
-  const inclinationDeg = 30 + (noradId % 60);
-  const inclinationRad = (inclinationDeg * Math.PI) / 180;
-  const raanDeg = (noradId * 13) % 360;
-  const raanRad = (raanDeg * Math.PI) / 180;
-
-  const timeSpeedup = 150;
-  const earthRotationSpeed = 360 / (86164 * 1000);
-  const rotationAngle = (timeMs * timeSpeedup * earthRotationSpeed) % 360;
-
-  const points = [];
-  const numPoints = 90;
-  for (let i = 0; i <= numPoints; i++) {
-    const phase = (i / numPoints) * 2 * Math.PI;
-    const x_orbit = a * Math.cos(phase);
-    const y_orbit = a * Math.sin(phase);
-
-    const x_eci = x_orbit * Math.cos(raanRad) - y_orbit * Math.sin(raanRad) * Math.cos(inclinationRad);
-    const y_eci = x_orbit * Math.sin(raanRad) + y_orbit * Math.cos(raanRad) * Math.cos(inclinationRad);
-    const z_eci = y_orbit * Math.sin(inclinationRad);
-
-    const r = Math.sqrt(x_eci * x_eci + y_eci * y_eci + z_eci * z_eci);
-    const lat = (Math.asin(z_eci / r) * 180) / Math.PI;
-    let lng = (Math.atan2(y_eci, x_eci) * 180) / Math.PI;
-
-    lng = ((lng - rotationAngle + 180) % 360) - 180;
-    if (lng < -180) lng += 360;
-
-    points.push({ lat, lng });
-  }
-  return points;
-}
-
-function toTrack(sat: SatelliteSummary): SatelliteTrack {
+function toTrack(sat: SatelliteSummary): SatelliteTrack | null {
+  if (!sat.epoch_time || sat.inclination == null || sat.eccentricity == null ||
+      sat.mean_motion == null || sat.raan == null || sat.arg_of_perigee == null ||
+      sat.mean_anomaly == null) return null;
+  const elements = {
+    epoch_time: sat.epoch_time, inclination: sat.inclination, eccentricity: sat.eccentricity,
+    mean_motion: sat.mean_motion, raan: sat.raan,
+    arg_of_perigee: sat.arg_of_perigee, mean_anomaly: sat.mean_anomaly,
+  };
+  const epoch = elementEpoch(elements.epoch_time);
+  if (!Number.isFinite(epoch) || Math.abs(Date.now() - epoch) > 14 * 86400000) return null;
+  const position = propagateElements(elements, Date.now());
+  if (!position) return null;
   const orbit = orbitType(sat.orbit_type);
-  const altitude = Math.round(Number(sat.altitude_km) || (orbit === "GEO" ? 35786 : orbit === "MEO" ? 20200 : 550));
+  const altitude = Math.round(position.altitudeKm);
   const risk = Math.round(Number(sat.risk_score) || 0);
 
   return {
     id: sat.norad_id,
     name: sat.object_name,
     orbit,
-    lat: 0,
-    lng: 0,
+    lat: position.lat,
+    lng: position.lng,
     alt: altitude,
-    velocity: orbit === "GEO" ? "3.07 km/s" : orbit === "MEO" ? "3.90 km/s" : "7.50 km/s",
+    velocity: `${position.velocityKmS.toFixed(2)} km/s`,
     risk,
     compliance: sat.risk_level || "N/A",
     sustainability: Math.max(0, 100 - risk),
     forecast: risk >= 75 ? "critical" : risk >= 55 ? "elevated" : risk >= 35 ? "watch" : "nominal",
     operator: sat.object_id || "Catalogued",
+    elements,
   };
 }
 
@@ -158,39 +78,36 @@ function toTrack(sat: SatelliteSummary): SatelliteTrack {
 export default function AstroComplyDashboardPage() {
   const router = useRouter();
   const [satellites, setSatellites] = useState<SatelliteTrack[]>([]);
-  const [metrics, setMetrics] = useState<MetricsSummaryPayload | null>(null);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [timeMs, setTimeMs] = useState(0);
+  const [timeMs, setTimeMs] = useState(() => Date.now());
 
   useEffect(() => {
-    const start = Date.now();
-    const interval = setInterval(() => {
-      setTimeMs(Date.now() - start);
-    }, 60);
+    const interval = setInterval(() => setTimeMs(Date.now()), 10000);
     return () => clearInterval(interval);
   }, []);
 
   const selectedSat = useMemo(() => {
     const sat = satellites.find((s) => s.id === selectedId) ?? satellites[0] ?? null;
     if (!sat) return null;
-    const pos = propagateOrbit(sat.id, sat.alt, sat.orbit, timeMs);
+    const pos = sat.elements && propagateElements(sat.elements, timeMs);
+    if (!pos) return null;
     return {
       ...sat,
       lat: pos.lat,
       lng: pos.lng,
-      velocity: `${pos.vel.toFixed(2)} km/s`,
+      velocity: `${pos.velocityKmS.toFixed(2)} km/s`,
     };
   }, [satellites, selectedId, timeMs]);
 
   const propagatedSatellites = useMemo(() => {
     return satellites.map((sat) => {
-      const pos = propagateOrbit(sat.id, sat.alt, sat.orbit, timeMs);
+      const pos = sat.elements && propagateElements(sat.elements, timeMs);
       return {
         ...sat,
-        lat: pos.lat,
-        lng: pos.lng,
+        lat: pos?.lat ?? sat.lat,
+        lng: pos?.lng ?? sat.lng,
       };
     });
   }, [satellites, timeMs]);
@@ -198,7 +115,7 @@ export default function AstroComplyDashboardPage() {
   const orbitPath = useMemo(() => {
     const sat = satellites.find((s) => s.id === selectedId) ?? satellites[0] ?? null;
     if (!sat) return undefined;
-    return generateOrbitPath(sat.id, sat.alt, sat.orbit, timeMs);
+    return sat.elements ? orbitGroundTrack(sat.elements, timeMs) : undefined;
   }, [satellites, selectedId, timeMs]);
 
   const filteredSatellites = useMemo(() => {
@@ -213,14 +130,10 @@ export default function AstroComplyDashboardPage() {
     let cancelled = false;
     async function loadInitialData() {
       try {
-        const [satPayload, metricsPayload] = await Promise.all([
-          listSatellites(100, 0),
-          getMetricsSummary(),
-        ]);
+        const satPayload = await listSatellites(100, 0);
         if (cancelled) return;
-        const tracks = satPayload.satellites.map(toTrack);
+        const tracks = satPayload.satellites.map(toTrack).filter((sat): sat is SatelliteTrack => sat !== null);
         setSatellites(tracks);
-        setMetrics(metricsPayload);
         setSelectedId(tracks[0]?.id ?? null);
       } catch (err: unknown) {
         if (!cancelled) setError(err instanceof Error ? err.message : "Unable to load live satellite data.");
@@ -242,7 +155,7 @@ export default function AstroComplyDashboardPage() {
           : await listSatellites(100, 0);
         if (cancelled) return;
         const nextSatellites = "results" in payload ? payload.results : payload.satellites;
-        const tracks = nextSatellites.map(toTrack);
+        const tracks = nextSatellites.map(toTrack).filter((sat): sat is SatelliteTrack => sat !== null);
         setSatellites(tracks);
         setSelectedId((current) => tracks.some((sat) => sat.id === current) ? current : tracks[0]?.id ?? null);
       } catch (err: unknown) {
@@ -255,7 +168,6 @@ export default function AstroComplyDashboardPage() {
     };
   }, [searchQuery]);
 
-  const heroCount = useCountUp(metrics?.total_satellites ?? 0, 2200);
   const velNum = useCountUp(Math.round(parseVel(selectedSat?.velocity ?? "0") * 100), 800, [selectedId]);
   const altCount = useCountUp(selectedSat?.alt ?? 0, 800, [selectedId]);
   const riskCount = useCountUp(selectedSat?.risk ?? 0, 800, [selectedId]);
@@ -268,17 +180,6 @@ export default function AstroComplyDashboardPage() {
     ? "var(--c-elevated)"
     : "var(--c-nominal)";
 
-  // Determine simulated UiPath Maestro BPMN step based on satellite properties
-  const maestroStep = useMemo(() => {
-    if (!selectedSat) return 0;
-    if (selectedSat.name.toLowerCase().includes("unpaid") || selectedSat.id % 7 === 0) {
-      return 2; // Failed SAP Billing
-    }
-    if (selectedSat.risk >= 55) {
-      return 4; // Held in Action Center for waiver review
-    }
-    return 6; // Approved and Registered successfully
-  }, [selectedSat]);
 
   return (
     <div className="relative w-full overflow-y-auto main-scroll-container bg-black" style={{ height: "calc(100vh - var(--topbar-h))" }}>
@@ -316,11 +217,11 @@ export default function AstroComplyDashboardPage() {
           <div className="absolute top-4 left-4 z-20 pointer-events-none">
             <div className="flex flex-col gap-0.5">
               <span className="font-data text-[7px] uppercase tracking-[0.35em]" style={{ color: "rgba(77,217,245,0.4)" }}>
-                ILLUSTRATIVE POSITIONS · 150× SPEED
+                TWO BODY ESTIMATES · EPOCH WITHIN 14 DAYS
               </span>
               <div className="flex items-center gap-1.5 mt-0.5">
                 <span className="font-display text-[15px] uppercase tracking-wider text-white" style={{ textShadow: "0 0 20px rgba(255,255,255,0.4)" }}>
-                  ORBIT SIMULATION
+                  CATALOGUE ORBIT VIEW
                 </span>
                 <span className="h-1.5 w-1.5 rounded-full bg-[#00d4ff] animate-ping" />
               </div>
@@ -377,7 +278,7 @@ export default function AstroComplyDashboardPage() {
             </div>
             <div className="flex items-center gap-2">
               <span className="pulse-dot bg-[#00ff9d]" />
-              <span className="font-data text-[8px] uppercase tracking-widest text-[#00ff9d]">ACTIVE</span>
+              <span className="font-data text-[8px] uppercase tracking-widest text-[#00ff9d]">CATALOGUE</span>
             </div>
           </div>
 
@@ -386,7 +287,7 @@ export default function AstroComplyDashboardPage() {
             <div className="flex items-center justify-between mb-3">
               <span className="font-digital text-[8px] text-slate-500 uppercase tracking-widest">Illustrative workflow</span>
               <span className="font-digital text-[9px] text-[#00d4ff] uppercase font-bold">
-                {maestroStep === 2 ? "STOPPED @ SAP FEE CHECK" : maestroStep === 4 ? "HELD @ ACTION CENTER" : "COMPLETED & REGISTERED"}
+                NO LIVE WORKFLOW
               </span>
             </div>
 
@@ -401,23 +302,10 @@ export default function AstroComplyDashboardPage() {
                 { step: 4, label: "Action Center", activeStep: 4 },
                 { step: 5, label: "RPA Bot", activeStep: 5 }
               ].map((s) => {
-                const isCompleted = maestroStep > s.step || (maestroStep === 6);
-                const isCurrent = maestroStep === s.step;
-                const isError = (maestroStep === 2 && s.step === 2);
-                const isWarning = (maestroStep === 4 && s.step === 4);
-
-                let bgClass = "bg-slate-900 border-slate-700 text-slate-500";
-                if (isCompleted) bgClass = "bg-[#00ff9d] border-[#00ff9d] text-black font-bold";
-                else if (isCurrent) {
-                  if (isError) bgClass = "bg-[#ff3366] border-[#ff3366] text-white font-bold animate-pulse";
-                  else if (isWarning) bgClass = "bg-[#ffb700] border-[#ffb700] text-black font-bold animate-pulse";
-                  else bgClass = "bg-[#00d4ff] border-[#00d4ff] text-black font-bold";
-                }
-
                 return (
                   <div key={s.step} className="flex flex-col items-center gap-1.5">
-                    <div className={`h-7 w-7 rounded-full border flex items-center justify-center font-digital text-xs transition-all duration-300 ${bgClass}`}>
-                      {isCompleted ? "✓" : s.step}
+                    <div className="h-7 w-7 rounded-full border flex items-center justify-center font-digital text-xs bg-slate-900 border-slate-700 text-slate-500">
+                      {s.step}
                     </div>
                     <span className="font-digital text-[7px] uppercase tracking-wider text-slate-400">
                       {s.label}
@@ -434,7 +322,7 @@ export default function AstroComplyDashboardPage() {
               <Search size={10} style={{ color: "var(--c-cyan)", opacity: 0.7 }} />
               <input
                 type="text"
-                placeholder="Search catalog NORAD ID to trace BPMN lifecycle..."
+                placeholder="Search catalogue name or NORAD ID..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="w-full bg-transparent font-data text-[10px] outline-none placeholder:text-slate-600"
@@ -446,11 +334,12 @@ export default function AstroComplyDashboardPage() {
           {/* Catalog list */}
           <div className="flex-1 overflow-y-auto min-h-0" style={{ borderBottom: "1px solid var(--c-border)" }}>
             <div className="grid grid-cols-12 px-4 py-1.5 shrink-0 border-b border-white/[0.02] bg-white/[0.005]">
-              <span className="col-span-8 font-data text-[7px] uppercase text-slate-500">PROPOSAL ASSET</span>
+              <span className="col-span-8 font-data text-[7px] uppercase text-slate-500">CATALOGUED OBJECT</span>
               <span className="col-span-2 font-data text-[7px] uppercase text-slate-500 text-center">ORBIT</span>
               <span className="col-span-2 font-data text-[7px] uppercase text-slate-500 text-right">RISK</span>
             </div>
             
+            {filteredSatellites.length === 0 && <p className="p-4 text-xs text-slate-400">No recent complete orbital elements are available for this view.</p>}
             <AnimatePresence mode="popLayout">
               {filteredSatellites.map((sat) => {
                 const isSelected = sat.id === selectedId;
@@ -515,21 +404,7 @@ export default function AstroComplyDashboardPage() {
                     {selectedSat.name}
                   </span>
                   
-                  {maestroStep === 2 && (
-                    <span className="font-digital text-[8px] bg-[#ff3366]/10 border border-[#ff3366]/30 text-[#ff3366] px-1.5 py-0.5 rounded">
-                      BILLING BLOCK
-                    </span>
-                  )}
-                  {maestroStep === 4 && (
-                    <span className="font-digital text-[8px] bg-[#ffb700]/10 border border-[#ffb700]/30 text-[#ffb700] px-1.5 py-0.5 rounded animate-pulse">
-                      ACTION CENTER
-                    </span>
-                  )}
-                  {maestroStep === 6 && (
-                    <span className="font-digital text-[8px] bg-[#00ff9d]/10 border border-[#00ff9d]/30 text-[#00ff9d] px-1.5 py-0.5 rounded">
-                      APPROVED
-                    </span>
-                  )}
+                  <span className="font-data text-[8px] text-slate-400">Epoch {selectedSat.elements?.epoch_time}</span>
                 </div>
 
                 {/* Details layout */}
@@ -707,7 +582,7 @@ export default function AstroComplyDashboardPage() {
               8-Agent LangGraph<br/>Regulatory Audit
             </h2>
             <p className="text-[13px] leading-relaxed text-slate-300 font-mono">
-              FastAPI executes our LangGraph orchestrator graph. The Compliance Agent utilizes Retrieval-Augmented Generation (RAG) to query IADC and ESA disposal frameworks, grading the satellite's parameters against 25-year post-mission disposal laws, casualty limits, and congestion burden indexes.
+              FastAPI executes our LangGraph orchestrator graph. The Compliance Agent utilizes Retrieval-Augmented Generation (RAG) to query IADC and ESA disposal frameworks, grading the satellite parameters against post-mission disposal guidance, casualty limits, and congestion burden indexes.
             </p>
             <div className="pt-2">
               <button 

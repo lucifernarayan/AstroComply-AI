@@ -54,7 +54,9 @@ class SatelliteRepository:
 
     def get_by_name(self, name: str, limit: int = 20) -> list:
         sql = text("""
-            SELECT s.norad_id, s.object_name, s.object_id, s.inclination, s.mean_motion,
+            SELECT s.norad_id, s.object_name, s.object_id, s.epoch_time,
+                   s.inclination, s.eccentricity, s.mean_motion, s.raan,
+                   s.arg_of_perigee, s.mean_anomaly,
                    op.altitude_km, op.orbit_type, r.risk_score, r.risk_level
             FROM   satellites s
             LEFT   JOIN LATERAL (
@@ -162,6 +164,14 @@ class SatelliteRepository:
             SELECT
                 s.norad_id,
                 s.object_name,
+                s.object_id,
+                s.epoch_time,
+                s.inclination,
+                s.eccentricity,
+                s.mean_motion,
+                s.raan,
+                s.arg_of_perigee,
+                s.mean_anomaly,
                 op.altitude_km,
                 op.orbit_type,
                 r.risk_score,

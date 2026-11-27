@@ -16,6 +16,9 @@ services:
       - ./backend/database/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
       - ./backend/database/migrations/001_workspaces.sql:/docker-entrypoint-initdb.d/02-workspaces.sql:ro
       - ./backend/database/migrations/002_events.sql:/docker-entrypoint-initdb.d/03-events.sql:ro
+      - ./backend/database/migrations/003_investigations.sql:/docker-entrypoint-initdb.d/04-investigations.sql:ro
+      - ./backend/database/migrations/004_event_versions.sql:/docker-entrypoint-initdb.d/05-event-versions.sql:ro
+      - ./backend/database/migrations/005_worker_heartbeat.sql:/docker-entrypoint-initdb.d/06-worker-heartbeat.sql:ro
 
   qdrant:
     image: qdrant/qdrant:latest
@@ -45,6 +48,17 @@ services:
     depends_on:
       - postgres
       - qdrant
+
+  investigation-worker:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    command: python -m backend.intelligence.job_worker
+    restart: always
+    environment:
+      - DATABASE_URL=postgresql://postgres:pg_secure_password_change_me@postgres:5432/mosip
+    depends_on:
+      - postgres
 
   frontend:
     build:

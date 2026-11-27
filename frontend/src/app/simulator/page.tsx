@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
   Sliders, Gauge, RotateCcw, Zap, AlertTriangle, ShieldCheck, 
-  FileText, DollarSign, User, Clock, ArrowRight, UploadCloud, 
+  FileText, User, Clock, UploadCloud,
   CheckCircle2, Activity, Play, ShieldAlert, Cpu
 } from "lucide-react";
 import {
@@ -20,6 +20,8 @@ import {
   registerUiPathAsset, 
   escalateUiPathJob,
   type AssessmentPayload,
+  type SapFeePayload,
+  type RegisterAssetPayload,
   type UiPathJobStatusPayload
 } from "@/utils/api";
 
@@ -63,7 +65,7 @@ function textFrom(section: Record<string, unknown> | undefined, keys: string[], 
   return fallback;
 }
 
-function resultsFromAssessment(assessment: any): SimulationResults {
+function resultsFromAssessment(assessment: AssessmentPayload): SimulationResults {
   const riskScore = Math.round(valueFrom(assessment.collision_analysis, ["risk_score"]));
   const burden = Math.round(valueFrom(assessment.sustainability_analysis, ["orbital_burden_score", "environmental_burden"]));
   const sustainability = Math.round(valueFrom(assessment.sustainability_analysis, ["sustainability_index"]));
@@ -127,9 +129,9 @@ export default function SimulatorPage() {
   // Simulation process flow tracking
   const [uiSimStatus, setUiSimStatus] = useState<"idle" | "ingesting" | "sap_check" | "running_audit" | "action_center" | "approved" | "registering" | "escalated" | "completed" | "failed">("idle");
   const [currentJobId, setCurrentJobId] = useState<string | null>(null);
-  const [sapResult, setSapResult] = useState<any | null>(null);
+  const [sapResult, setSapResult] = useState<SapFeePayload | null>(null);
   const [jobDetails, setJobDetails] = useState<UiPathJobStatusPayload | null>(null);
-  const [registryDetails, setRegistryDetails] = useState<any | null>(null);
+  const [registryDetails, setRegistryDetails] = useState<RegisterAssetPayload | null>(null);
   const [uipathLogs, setUipathLogs] = useState<string[]>([]);
   const [secondsRemaining, setSecondsRemaining] = useState<number>(0);
   const [uipathError, setUipathError] = useState<string | null>(null);
@@ -140,9 +142,9 @@ export default function SimulatorPage() {
   const slaTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   // Add a log entry helper
-  const addLog = (msg: string) => {
+  const addLog = useCallback((msg: string) => {
     setUipathLogs((prev) => [...prev, `[${new Date().toLocaleTimeString()}] ${msg}`]);
-  };
+  }, []);
 
   // Cleanup timers on unmount
   useEffect(() => {
@@ -152,30 +154,8 @@ export default function SimulatorPage() {
     };
   }, []);
 
-  // SLA Countdown Timer Effect
-  useEffect(() => {
-    if (uiSimStatus === "action_center" && secondsRemaining > 0) {
-      slaTimerRef.current = setTimeout(() => {
-        setSecondsRemaining((prev) => {
-          if (prev <= 1) {
-            handleSlaTimeout();
-            return 0;
-          }
-          return prev - 1;
-        });
-      }, 1000);
-    } else {
-      if (slaTimerRef.current) {
-        clearTimeout(slaTimerRef.current);
-      }
-    }
-    return () => {
-      if (slaTimerRef.current) clearTimeout(slaTimerRef.current);
-    };
-  }, [uiSimStatus, secondsRemaining]);
-
   // Handle SLA timeout automatically
-  const handleSlaTimeout = async () => {
+  const handleSlaTimeout = useCallback(async () => {
     if (!currentJobId) return;
     addLog("⚠️ SLA DEADLINE BREACHED! Escalating simulated job for operator review.");
     try {
@@ -187,10 +167,27 @@ export default function SimulatorPage() {
       // Update job details to show Escalated
       const updated = await getUiPathJobStatus(currentJobId);
       setJobDetails(updated);
-    } catch (err: any) {
-      addLog(`❌ Escalation API error: ${err.message}`);
+    } catch (err: unknown) {
+      addLog(`❌ Escalation API error: ${(err instanceof Error ? err.message : "Unknown error")}`);
     }
-  };
+  }, [currentJobId, addLog]);
+
+  // SLA Countdown Timer Effect
+  useEffect(() => {
+    if (uiSimStatus === "action_center" && secondsRemaining > 0) {
+      slaTimerRef.current = setTimeout(() => {
+        if (secondsRemaining <= 1) {
+          setSecondsRemaining(0);
+          void handleSlaTimeout();
+        } else {
+          setSecondsRemaining(secondsRemaining - 1);
+        }
+      }, 1000);
+    }
+    return () => {
+      if (slaTimerRef.current) clearTimeout(slaTimerRef.current);
+    };
+  }, [uiSimStatus, secondsRemaining, handleSlaTimeout]);
 
   // Run direct sandbox simulation
   const runSandboxSim = async () => {
@@ -341,17 +338,17 @@ export default function SimulatorPage() {
             setUiSimStatus("failed");
             addLog(`❌ Audit execution failed: ${statusRes.errors.join(", ")}`);
           }
-        } catch (err: any) {
+        } catch (err: unknown) {
           clearInterval(pollIntervalRef.current!);
           setUiSimStatus("failed");
-          addLog(`❌ Error polling job status: ${err.message}`);
+          addLog(`❌ Error polling job status: ${(err instanceof Error ? err.message : "Unknown error")}`);
         }
       }, 2000);
 
-    } catch (err: any) {
+    } catch (err: unknown) {
       setUiSimStatus("failed");
-      setUipathError(err.message || "UiPath simulation failed.");
-      addLog(`❌ Simulation crashed: ${err.message}`);
+      setUipathError(err instanceof Error ? err.message : "UiPath simulation failed.");
+      addLog(`❌ Simulation crashed: ${(err instanceof Error ? err.message : "Unknown error")}`);
     }
   };
 
@@ -364,8 +361,8 @@ export default function SimulatorPage() {
         job_id: jobId,
         operator_id: currentJob.operator_id,
         object_name: currentJob.object_name,
-        orbit_type: currentJob.result?.orbital_analysis?.orbit_type || "LEO",
-        altitude_km: currentJob.raw_params.altitude_km || 600
+        orbit_type: String(currentJob.result?.orbital_analysis?.orbit_type ?? "LEO"),
+        altitude_km: Number(currentJob.raw_params.altitude_km ?? 600)
       });
       setRegistryDetails(regRes);
       await new Promise(resolve => setTimeout(resolve, 1500));
@@ -374,9 +371,9 @@ export default function SimulatorPage() {
       // Step 6: Complete
       setUiSimStatus("completed");
       addLog("🎉 [Step 6/6] UiPath Orchestration Workflow finished successfully! Mission licensed.");
-    } catch (err: any) {
+    } catch (err: unknown) {
       setUiSimStatus("failed");
-      addLog(`❌ RPA Asset Registration failed: ${err.message}`);
+      addLog(`❌ RPA Asset Registration failed: ${(err instanceof Error ? err.message : "Unknown error")}`);
     }
   };
 
@@ -389,8 +386,8 @@ export default function SimulatorPage() {
       setUiSimStatus("approved");
       addLog("✅ Action Center Task Resolved: Approved.");
       triggerRpaAssetRegistration(currentJobId, jobDetails);
-    } catch (err: any) {
-      addLog(`❌ Approval API error: ${err.message}`);
+    } catch (err: unknown) {
+      addLog(`❌ Approval API error: ${(err instanceof Error ? err.message : "Unknown error")}`);
     }
   };
 
@@ -407,8 +404,8 @@ export default function SimulatorPage() {
       // Update job details to show Escalated
       const updated = await getUiPathJobStatus(currentJobId);
       setJobDetails(updated);
-    } catch (err: any) {
-      addLog(`❌ Escalation API error: ${err.message}`);
+    } catch (err: unknown) {
+      addLog(`❌ Escalation API error: ${(err instanceof Error ? err.message : "Unknown error")}`);
     }
   };
 
@@ -453,6 +450,9 @@ export default function SimulatorPage() {
           </button>
         </div>
       </div>
+
+      {activeTab === "sandbox" && sandboxError && <p role="alert" className="mb-4 border border-red-500/40 p-3 text-red-300">{sandboxError}</p>}
+      {activeTab === "uipath" && uipathError && <p role="alert" className="mb-4 border border-red-500/40 p-3 text-red-300">{uipathError}</p>}
 
       <AnimatePresence mode="wait">
         {/* ── TAB 1: SANDBOX MODELER ─────────────────────────────────────── */}
@@ -1059,7 +1059,7 @@ export default function SimulatorPage() {
                     <div className="bg-[#0c0c16] border border-white/[0.05] p-3 rounded text-center">
                       <span className="eyebrow block mb-1">Sustainability Index</span>
                       <span className="font-digital text-sm text-[#00d4ff] font-bold">
-                        {jobDetails.result?.sustainability_analysis?.sustainability_index || "82"}/100
+                        {String(jobDetails.result?.sustainability_analysis?.sustainability_index ?? "—")}/100
                       </span>
                     </div>
                     <div className="bg-[#0c0c16] border border-white/[0.05] p-3 rounded text-center">

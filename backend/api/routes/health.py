@@ -8,6 +8,21 @@ from knowledge_layer.rag_service import qdrant_healthy
 router = APIRouter()
 
 
+@router.get('/health/worker', summary='Investigation worker status')
+def worker_health():
+    try:
+        with engine.connect() as connection:
+            row = connection.execute(text('''SELECT last_seen_at,last_job_at,
+                last_seen_at > now() - interval '15 seconds' AS healthy
+                FROM worker_heartbeat WHERE worker_name='investigations' ''' )).mappings().first()
+        if not row:
+            return {'status': 'not_started', 'last_seen_at': None, 'last_job_at': None}
+        return {'status': 'healthy' if row['healthy'] else 'stale',
+                'last_seen_at': row['last_seen_at'], 'last_job_at': row['last_job_at']}
+    except Exception:
+        return {'status': 'unavailable', 'last_seen_at': None, 'last_job_at': None}
+
+
 @router.get("/health", summary="Health check")
 def health_check():
     """Returns API status and confirms connectivity to PostgreSQL and Qdrant."""

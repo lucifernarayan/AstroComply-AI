@@ -1,7 +1,8 @@
 import uuid
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any, List
-from fastapi import APIRouter, HTTPException, BackgroundTasks
+from fastapi import APIRouter, HTTPException, BackgroundTasks, Depends
+from backend.security.auth import active_membership, require_role
 from pydantic import BaseModel, Field
 
 from knowledge_layer.orchestrator import run_full_assessment
@@ -97,11 +98,12 @@ def run_uipath_audit_background(job_id: str, raw_params: dict, risk_threshold: f
 # ── Endpoints ─────────────────────────────────────────────────────────────────
 
 @router.post("/job/submit", summary="Submit a satellite parameters job for multi-agent auditing")
-def submit_job(payload: UiPathJobSubmitRequest, background_tasks: BackgroundTasks):
+def submit_job(payload: UiPathJobSubmitRequest, background_tasks: BackgroundTasks, member: dict = Depends(active_membership)):
     """
     Submits a satellite profile. Starts the multi-agent LangGraph analysis in the background
     and returns a unique job identifier.
     """
+    require_role(member, {"owner", "administrator", "operator", "analyst"})
     job_id = f"job-{uuid.uuid4().hex[:8]}"
 
     raw_params = {
@@ -119,6 +121,8 @@ def submit_job(payload: UiPathJobSubmitRequest, background_tasks: BackgroundTask
 
     uipath_jobs[job_id] = {
         "job_id": job_id,
+        "organization_id": member["organization_id"],
+        "user_id": member["user_id"],
         "operator_id": payload.operator_id,
         "object_name": payload.object_name,
         "status": "PENDING",
@@ -155,24 +159,25 @@ def submit_job(payload: UiPathJobSubmitRequest, background_tasks: BackgroundTask
 
 
 @router.get("/job/status/{job_id}", summary="Check status of a submitted audit job")
-def get_job_status(job_id: str):
+def get_job_status(job_id: str, member: dict = Depends(active_membership)):
     """
     Checks the status and results of a submitted job.
     Allows polling for completion of report and Action Center status.
     """
-    if job_id not in uipath_jobs:
+    if job_id not in uipath_jobs or uipath_jobs[job_id].get("organization_id") != member["organization_id"]:
         raise HTTPException(status_code=404, detail=f"Job {job_id} not found.")
 
     return uipath_jobs[job_id]
 
 
 @router.post("/job/approve/{job_id}", summary="Manually approve a job held in Action Center")
-def approve_job(job_id: str):
+def approve_job(job_id: str, member: dict = Depends(active_membership)):
     """
     Simulates a human inspector approving the licensing request in UiPath Action Center.
     Clears the SLA timer and updates status to APPROVED.
     """
-    if job_id not in uipath_jobs:
+    require_role(member, {"owner", "administrator", "operator"})
+    if job_id not in uipath_jobs or uipath_jobs[job_id].get("organization_id") != member["organization_id"]:
         raise HTTPException(status_code=404, detail=f"Job {job_id} not found.")
 
     job = uipath_jobs[job_id]
@@ -211,10 +216,16 @@ def check_fee(operator_id: str):
 
 
 @router.post("/sap/register-asset", summary="Register approved satellite in the external registry")
-def register_asset(payload: AssetRegisterRequest):
+def register_asset(payload: AssetRegisterRequest, member: dict = Depends(active_membership)):
     """
     Mocks asset registration via a UiPath RPA bot connecting to an external space asset registry.
     """
+    require_role(member, {"owner", "administrator", "operator"})
+    job = uipath_jobs.get(payload.job_id)
+    if not job or job.get("organization_id") != member["organization_id"]:
+        raise HTTPException(404, "Job not found")
+    if job["status"] != "APPROVED":
+        raise HTTPException(409, "Job requires approval")
     registration_id = f"REG-{uuid.uuid4().hex[:8].upper()}"
     return {
         "status": "SUCCESS",
@@ -225,12 +236,13 @@ def register_asset(payload: AssetRegisterRequest):
 
 
 @router.post("/escalate", summary="Escalate a simulation for operator review")
-def escalate_job(payload: EscalateRequest):
+def escalate_job(payload: EscalateRequest, member: dict = Depends(active_membership)):
     """
     Record a simulation escalation for operator review.
     """
+    require_role(member, {"owner", "administrator", "operator"})
     job_id = payload.job_id
-    if job_id not in uipath_jobs:
+    if job_id not in uipath_jobs or uipath_jobs[job_id].get("organization_id") != member["organization_id"]:
         raise HTTPException(status_code=404, detail=f"Job {job_id} not found.")
 
     uipath_jobs[job_id]["status"] = "ESCALATED"

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import type { LucideIcon } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Database, GitMerge, Brain, Cpu, ShieldCheck, Gauge,
@@ -11,7 +12,7 @@ type ArchNode = {
   id: string;
   title: string;
   subtitle: string;
-  icon: any;
+  icon: LucideIcon;
   tech: string;
   desc: string;
   color: string;

@@ -9,10 +9,14 @@ async function requestJson<T>(path: string, options: FetchOptions = {}): Promise
   const timeout = setTimeout(() => controller.abort(), options.timeoutMs ?? 12000);
 
   try {
+    const token = typeof window === "undefined" ? null : sessionStorage.getItem("astrocomply_session");
+    const organization = typeof window === "undefined" ? null : sessionStorage.getItem("astrocomply_organization");
     const response = await fetch(`${API_BASE}${path}`, {
       ...options,
       headers: {
         "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...(organization ? { "X-Organization-Id": organization } : {}),
         ...(options.headers ?? {}),
       },
       signal: controller.signal,
@@ -53,7 +57,12 @@ export type SatelliteSummary = {
   object_name: string;
   object_id?: string | null;
   inclination?: number | null;
+  eccentricity?: number | null;
   mean_motion?: number | null;
+  raan?: number | null;
+  arg_of_perigee?: number | null;
+  mean_anomaly?: number | null;
+  epoch_time?: string | null;
   altitude_km?: number | null;
   orbit_type?: string | null;
   risk_score?: number | null;
@@ -207,10 +216,10 @@ export type UiPathJobStatusPayload = {
   updated_at: string;
   sla_expires_at: string | null;
   risk_threshold: number;
-  result: Record<string, any> | null;
+  result: AssessmentPayload | null;
   errors: string[];
   escalation_reason: string | null;
-  raw_params: Record<string, any>;
+  raw_params: Record<string, unknown>;
 };
 
 export type SapFeePayload = {

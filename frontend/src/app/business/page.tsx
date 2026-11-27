@@ -2,12 +2,9 @@
 
 import { useState } from "react";
 import {
-  Coins,
   ShieldCheck,
   Zap,
   ChevronRight,
-  TrendingUp,
-  FileCheck,
   Activity,
   Layers,
   ArrowUpRight,

@@ -1,10 +1,18 @@
-from fastapi import APIRouter, HTTPException, Query
+import os
+import hmac
+from fastapi import APIRouter, HTTPException, Query, Header
 from pydantic import BaseModel, Field
 from typing import Optional
 from backend.services.satellite_service import SatelliteService
 
 router = APIRouter()
 service = SatelliteService()
+
+
+def require_catalogue_admin(key: str | None):
+    configured = os.getenv("ASTROCOMPLY_ADMIN_KEY")
+    if not configured or not key or not hmac.compare_digest(key, configured):
+        raise HTTPException(status_code=403, detail="Catalogue maintenance is unavailable")
 
 
 # ── Request schema for raw orbital parameter input ────────────────────────────
@@ -25,6 +33,7 @@ class RawAnalysisRequest(BaseModel):
 @router.get("/{norad_id}", summary="Analyze satellite by NORAD ID")
 def analyze_by_norad(
     norad_id: int,
+    x_admin_key: str | None = Header(default=None),
     store: bool = Query(
         default=False,
         description="If true, persist computed results to orbital_parameters and risk_assessments tables"
@@ -38,6 +47,7 @@ def analyze_by_norad(
     Set `?store=true` to persist the results back to the database.
     """
     if store:
+        require_catalogue_admin(x_admin_key)
         result = service.analyze_and_store(norad_id)
     else:
         result = service.analyze_satellite(norad_id=norad_id)
@@ -84,6 +94,7 @@ def analyze_raw(payload: RawAnalysisRequest):
 
 @router.post("/bulk", summary="Bulk analyze and store all unprocessed satellites")
 def bulk_analyze(
+    x_admin_key: str | None = Header(default=None),
     limit: int = Query(
         default=500, ge=1, le=5000,
         description="Max number of satellites to process in this call"
@@ -95,5 +106,6 @@ def bulk_analyze(
 
     Run this once after loading CelesTrak data to populate the derived tables.
     """
+    require_catalogue_admin(x_admin_key)
     result = service.bulk_analyze_and_store(limit=limit)
     return result

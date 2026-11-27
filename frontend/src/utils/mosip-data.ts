@@ -1,5 +1,4 @@
 import {
-  Activity,
   Binary,
   BookOpen,
   BrainCircuit,
@@ -10,9 +9,7 @@ import {
   Network,
   Orbit,
   Radar,
-  ShieldCheck,
   Sparkles,
-  TriangleAlert,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -33,6 +30,15 @@ export type SatelliteTrack = {
   sustainability: number;
   forecast: Severity;
   operator: string;
+  elements?: {
+    epoch_time: string;
+    inclination: number;
+    eccentricity: number;
+    mean_motion: number;
+    raan: number;
+    arg_of_perigee: number;
+    mean_anomaly: number;
+  };
 };
 
 /* ── Agent step ───────────────────────────────────────────────────────────── */

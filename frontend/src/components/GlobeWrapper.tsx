@@ -1,9 +1,10 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useEffect, useMemo, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { SatelliteTrack } from "@/utils/mosip-data";
 import * as THREE from "three";
+import type { GlobeMethods } from "react-globe.gl";
 
 const Globe = dynamic(() => import("react-globe.gl"), {
   ssr: false,
@@ -57,80 +58,14 @@ type GlobeWrapperProps = {
   orbitPath?: { lat: number; lng: number }[];
 };
 
-/* ── ISS Propagation & Orbit Path Generation ────────────────────────────── */
-function propagateIss(timeMs: number) {
-  const alt = 420; // altitude km
-  const inclinationDeg = 51.64; // real ISS inclination
-  const inclinationRad = (inclinationDeg * Math.PI) / 180;
-  const raanDeg = 125;
-  const raanRad = (raanDeg * Math.PI) / 180;
-  const R_earth = 6371;
-  const GM = 3.986004418e5;
-  const a = R_earth + alt;
-  const periodSec = 2 * Math.PI * Math.sqrt(Math.pow(a, 3) / GM);
-  const periodMs = periodSec * 1000;
-  
-  // Speed up rotation to make it visible
-  const timeSpeedup = 150;
-  const phase = ((timeMs * timeSpeedup) / periodMs) * 2 * Math.PI;
-
-  const x_orbit = a * Math.cos(phase);
-  const y_orbit = a * Math.sin(phase);
-
-  const x_eci = x_orbit * Math.cos(raanRad) - y_orbit * Math.sin(raanRad) * Math.cos(inclinationRad);
-  const y_eci = x_orbit * Math.sin(raanRad) + y_orbit * Math.cos(raanRad) * Math.cos(inclinationRad);
-  const z_eci = y_orbit * Math.sin(inclinationRad);
-
-  const r = Math.sqrt(x_eci * x_eci + y_eci * y_eci + z_eci * z_eci);
-  const lat = (Math.asin(z_eci / r) * 180) / Math.PI;
-  let lng = (Math.atan2(y_eci, x_eci) * 180) / Math.PI;
-
-  const earthRotationSpeed = 360 / (86164 * 1000);
-  const rotationAngle = (timeMs * timeSpeedup * earthRotationSpeed) % 360;
-  lng = ((lng - rotationAngle + 180) % 360) - 180;
-  if (lng < -180) lng += 360;
-
-  // Altitude mapped to globe units (0.18 is very clean and visible)
-  return { lat, lng, alt: 0.18 };
-}
-
-function generateIssOrbitPath() {
-  const alt = 420;
-  const inclinationDeg = 51.64;
-  const inclinationRad = (inclinationDeg * Math.PI) / 180;
-  const raanDeg = 125;
-  const raanRad = (raanDeg * Math.PI) / 180;
-  const R_earth = 6371;
-  const a = R_earth + alt;
-
-  const points = [];
-  const numPoints = 120;
-  for (let i = 0; i <= numPoints; i++) {
-    const phase = (i / numPoints) * 2 * Math.PI;
-    const x_orbit = a * Math.cos(phase);
-    const y_orbit = a * Math.sin(phase);
-
-    const x_eci = x_orbit * Math.cos(raanRad) - y_orbit * Math.sin(raanRad) * Math.cos(inclinationRad);
-    const y_eci = x_orbit * Math.sin(raanRad) + y_orbit * Math.cos(raanRad) * Math.cos(inclinationRad);
-    const z_eci = y_orbit * Math.sin(inclinationRad);
-
-    const r = Math.sqrt(x_eci * x_eci + y_eci * y_eci + z_eci * z_eci);
-    const lat = (Math.asin(z_eci / r) * 180) / Math.PI;
-    const lng = (Math.atan2(y_eci, x_eci) * 180) / Math.PI;
-
-    points.push({ lat, lng });
-  }
-  return points;
-}
-
 export function GlobeWrapper({ satellites, selectedId, onSelect, orbitPath }: GlobeWrapperProps) {
-  const globeRef = useRef<any>(null);
+  const globeRef = useRef<GlobeMethods | undefined>(undefined);
   const containerRef = useRef<HTMLDivElement>(null);
   const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
   const [localTime, setLocalTime] = useState(0);
   const moonRef = useRef<THREE.Mesh | null>(null);
 
-  // Local ticker for ISS & Moon propagation
+  // Local ticker for decorative Moon motion
   useEffect(() => {
     const start = Date.now();
     const interval = setInterval(() => {
@@ -138,18 +73,6 @@ export function GlobeWrapper({ satellites, selectedId, onSelect, orbitPath }: Gl
     }, 50);
     return () => clearInterval(interval);
   }, []);
-
-  const arcs = useMemo(
-    () =>
-      satellites.map((s, i) => ({
-        ...s,
-        startLat: s.lat,
-        startLng: s.lng,
-        endLat: s.lat * -0.72,
-        endLng: s.lng + 110 - i * 18,
-      })),
-    [satellites],
-  );
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -275,133 +198,6 @@ export function GlobeWrapper({ satellites, selectedId, onSelect, orbitPath }: Gl
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedId]);
 
-  // ISS Position
-  const issPosition = useMemo(() => {
-    const pos = propagateIss(localTime);
-    return [
-      {
-        id: "ISS",
-        name: "International Space Station",
-        lat: pos.lat,
-        lng: pos.lng,
-        alt: pos.alt,
-        isIss: true,
-      },
-    ];
-  }, [localTime]);
-
-  // ISS 3D Model Instance
-  const issGroup = useMemo(() => {
-    const group = new THREE.Group();
-
-    // Main structural truss
-    const trussGeom = new THREE.CylinderGeometry(0.06, 0.06, 3.2, 8);
-    const trussMat = new THREE.MeshStandardMaterial({ 
-      color: 0x8899a6, 
-      metalness: 0.8, 
-      roughness: 0.3 
-    });
-    const truss = new THREE.Mesh(trussGeom, trussMat);
-    truss.rotation.z = Math.PI / 2;
-    group.add(truss);
-    
-    // Central pressurized modules
-    const moduleMat = new THREE.MeshStandardMaterial({ 
-      color: 0xe0e8f0, 
-      metalness: 0.5, 
-      roughness: 0.2 
-    });
-    
-    const coreGeom = new THREE.CylinderGeometry(0.16, 0.16, 1.0, 12);
-    const core = new THREE.Mesh(coreGeom, moduleMat);
-    core.rotation.x = Math.PI / 2;
-    group.add(core);
-
-    const nodeGeom = new THREE.CylinderGeometry(0.12, 0.12, 0.6, 10);
-    const node1 = new THREE.Mesh(nodeGeom, moduleMat);
-    node1.position.set(0, 0, 0.28);
-    group.add(node1);
-
-    const node2 = new THREE.Mesh(nodeGeom, moduleMat);
-    node2.position.set(0, 0, -0.28);
-    group.add(node2);
-
-    // Solar panels
-    const panelGeom = new THREE.BoxGeometry(0.28, 0.01, 1.1);
-    const panelMat = new THREE.MeshStandardMaterial({ 
-      color: 0x00a2ff, 
-      emissive: 0x002d66,
-      metalness: 0.9, 
-      roughness: 0.1 
-    });
-
-    const offsets = [-1.3, -0.8, 0.8, 1.3];
-    offsets.forEach((offsetX) => {
-      const p1 = new THREE.Mesh(panelGeom, panelMat);
-      p1.position.set(offsetX, 0.38, 0.1);
-      p1.rotation.y = 0.12;
-      group.add(p1);
-
-      const p2 = new THREE.Mesh(panelGeom, panelMat);
-      p2.position.set(offsetX, -0.38, 0.1);
-      p2.rotation.y = 0.12;
-      group.add(p2);
-    });
-
-    // Radiators
-    const radiatorGeom = new THREE.BoxGeometry(0.16, 0.008, 0.65);
-    const radiatorMat = new THREE.MeshStandardMaterial({ 
-      color: 0xffffff, 
-      metalness: 0.1, 
-      roughness: 0.7 
-    });
-    
-    const rad1 = new THREE.Mesh(radiatorGeom, radiatorMat);
-    rad1.position.set(-0.3, 0, 0.4);
-    rad1.rotation.y = Math.PI / 4;
-    group.add(rad1);
-
-    const rad2 = new THREE.Mesh(radiatorGeom, radiatorMat);
-    rad2.position.set(0.3, 0, -0.4);
-    rad2.rotation.y = -Math.PI / 4;
-    group.add(rad2);
-
-    // Scale up ISS for visibility
-    group.scale.set(6.5, 6.5, 6.5);
-
-    return group;
-  }, []);
-
-  // Slowly spin the ISS
-  useEffect(() => {
-    if (issGroup) {
-      issGroup.rotation.y = (localTime * 0.0006) % (Math.PI * 2);
-    }
-  }, [localTime, issGroup]);
-
-  const getIssModel = useCallback(() => {
-    return issGroup;
-  }, [issGroup]);
-
-  // ISS Orbit Path
-  const issOrbitPath = useMemo(() => generateIssOrbitPath(), []);
-
-  // Combine ISS path and selected satellite path
-  const allPaths = useMemo(() => {
-    const list: any[] = [];
-    list.push({
-      points: issOrbitPath,
-      isIss: true,
-    });
-    if (orbitPath) {
-      list.push({
-        points: orbitPath,
-        isIss: false,
-      });
-    }
-    return list;
-  }, [orbitPath, issOrbitPath]);
-
   return (
     <div ref={containerRef} className="relative h-full w-full overflow-hidden" style={{ minHeight: 420 }}>
       {/* Deep space glow */}
@@ -444,8 +240,8 @@ export function GlobeWrapper({ satellites, selectedId, onSelect, orbitPath }: Gl
         pointsTransitionDuration={700}
         onPointClick={(s: object) => onSelect(s as SatelliteTrack)}
 
-        /* Satellite Arc Traces */
-        arcsData={arcs}
+        /* No fabricated arc traces */
+        arcsData={[]}
         arcStartLat="startLat"
         arcStartLng="startLng"
         arcEndLat="endLat"
@@ -465,23 +261,21 @@ export function GlobeWrapper({ satellites, selectedId, onSelect, orbitPath }: Gl
             : ["rgba(77,217,245,0.08)", "rgba(8,12,18,0)"];
         }}
 
-        /* ISS custom object layer */
-        objectsData={issPosition}
+        /* Satellite positions are drawn only from catalogue elements */
+        objectsData={[]}
         objectLat="lat"
         objectLng="lng"
         objectAltitude="alt"
-        objectThreeObject={getIssModel}
-
-        /* Combined Orbit Paths (ISS + Selected Sat) */
-        pathsData={allPaths}
-        pathPoints={(d: any) => d.points}
+        /* Selected catalogue orbit ground track */
+        pathsData={orbitPath ? [{ points: orbitPath, isIss: false }] : []}
+        pathPoints={(d: object) => (d as { points: { lat: number; lng: number }[] }).points}
         pathPointLat="lat"
         pathPointLng="lng"
-        pathColor={(d: any) => d.isIss ? "rgba(245,166,35,0.55)" : "rgba(77,217,245,0.45)"}
-        pathStroke={(d: any) => d.isIss ? 1.5 : 1.0}
-        pathDashLength={(d: any) => d.isIss ? 0.08 : 0.05}
-        pathDashGap={(d: any) => d.isIss ? 0.04 : 0.025}
-        pathDashAnimateTime={(d: any) => d.isIss ? 12000 : 18000}
+        pathColor={(d: object) => (d as { isIss: boolean }).isIss ? "rgba(245,166,35,0.55)" : "rgba(77,217,245,0.45)"}
+        pathStroke={(d: object) => (d as { isIss: boolean }).isIss ? 1.5 : 1.0}
+        pathDashLength={(d: object) => (d as { isIss: boolean }).isIss ? 0.08 : 0.05}
+        pathDashGap={(d: object) => (d as { isIss: boolean }).isIss ? 0.04 : 0.025}
+        pathDashAnimateTime={(d: object) => (d as { isIss: boolean }).isIss ? 12000 : 18000}
 
         width={dimensions.width}
         height={dimensions.height}
@@ -518,7 +312,6 @@ export function GlobeWrapper({ satellites, selectedId, onSelect, orbitPath }: Gl
           { label: "LEO", color: "#4dd9f5" },
           { label: "MEO", color: "#f5a623" },
           { label: "GEO", color: "#3de89b" },
-          { label: "ISS (LEO)", color: "#f5a623", isIss: true },
           { label: "MOON (LUNAR)", color: "#ffffff", isIss: true }
         ].map((regime) => (
           <div key={regime.label} className="flex items-center gap-1">

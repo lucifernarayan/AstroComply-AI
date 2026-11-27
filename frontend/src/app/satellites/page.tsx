@@ -2,15 +2,14 @@
 
 import { useState, useEffect, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import {
-  Brain, Cpu, ShieldCheck, Gauge, TrendingUp, Target, FileText,
-  CheckCircle, Play, RefreshCw, AlertTriangle, ShieldAlert, Activity,
+  Brain, ShieldCheck, TrendingUp,
+  Play, RefreshCw, AlertTriangle, ShieldAlert, Activity,
   AlertOctagon, BookOpen, FileCheck, Printer,
 } from "lucide-react";
 import {
   ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip,
-  LineChart, Line,
 } from "recharts";
 import { sourceColor } from "@/utils/mosip-data";
 import { assessNorad, searchSatellites, type AssessmentPayload, type RegulationSearchResult, type SatelliteSummary } from "@/utils/api";
@@ -38,14 +37,6 @@ function sectionString(section: Record<string, unknown> | undefined, keys: strin
     if (typeof value === "number") return String(value);
   }
   return fallback;
-}
-
-function sectionList(section: Record<string, unknown> | undefined, keys: string[]) {
-  for (const key of keys) {
-    const value = sectionValue(section, key);
-    if (Array.isArray(value)) return value.map(String);
-  }
-  return [];
 }
 
 function satelliteName(sat: SatelliteSummary | null) {
@@ -191,37 +182,38 @@ function SatelliteIntelContent() {
 
   const sat = selectedSat;
   const forecastData = buildForecastData(assessment);
-  const riskScore = Number((assessment?.collision_analysis as any)?.overall?.risk_score) || 0;
-  const sustainabilityIndex = Number((assessment?.sustainability_analysis as any)?.sustainability_index) || 0;
+  const overallRisk = assessment?.collision_analysis?.overall as Record<string, unknown> | undefined;
+  const riskScore = Number(overallRisk?.risk_score) || 0;
+  const sustainabilityIndex = Number(assessment?.sustainability_analysis?.sustainability_index) || 0;
 
   // 4 agent metric cards data
   const agentCards = assessment ? [
     {
       eyebrow: "Orbital Agent",
-      metric: `${((assessment.orbital_analysis as any)?.altitude_km as number) || 0}`,
+      metric: `${Number(assessment.orbital_analysis?.altitude_km) || 0}`,
       unit: "km",
-      detail: `${(assessment.orbital_analysis as any)?.orbit_type || "LEO"} · ${calculateVelocity(Number((assessment.orbital_analysis as any)?.altitude_km), String((assessment.orbital_analysis as any)?.orbit_type))}`,
+      detail: `${assessment.orbital_analysis?.orbit_type || "LEO"} · ${calculateVelocity(Number(assessment.orbital_analysis?.altitude_km), String(assessment.orbital_analysis?.orbit_type))}`,
       color: "#00d4ff",
     },
     {
       eyebrow: "Collision Agent",
       metric: `${riskScore}`,
       unit: "/100",
-      detail: `Risk level: ${(assessment.collision_analysis as any)?.overall?.risk_level || "NOMINAL"}`,
+      detail: `Risk level: ${overallRisk?.risk_level || "NOMINAL"}`,
       color: riskScore >= 75 ? "#ff3366" : riskScore >= 55 ? "#ffb700" : "#00ff9d",
     },
     {
       eyebrow: "Compliance Agent",
-      metric: `${getComplianceGrade(Number((assessment.compliance_analysis as any)?.compliance_score || 50))}`,
+      metric: `${getComplianceGrade(Number(assessment.compliance_analysis?.compliance_score || 50))}`,
       unit: "",
-      detail: `${(assessment.compliance_analysis as any)?.compliance_level || "UNKNOWN"} (${(assessment.compliance_analysis as any)?.compliance_score || 50}/100)`,
+      detail: `${assessment.compliance_analysis?.compliance_level || "UNKNOWN"} (${assessment.compliance_analysis?.compliance_score || 50}/100)`,
       color: "#00d4ff",
     },
     {
       eyebrow: "Sustainability Agent",
       metric: `${sustainabilityIndex}`,
       unit: "/100",
-      detail: `Burden: ${(assessment.sustainability_analysis as any)?.environmental_burden || 0}/40`,
+      detail: `Burden: ${assessment.sustainability_analysis?.environmental_burden || 0}/40`,
       color: "var(--c-nominal)",
     },
   ] : [];
@@ -521,11 +513,11 @@ function SatelliteIntelContent() {
                           <p className="eyebrow mb-2">Space Density Matrix</p>
                           <div className="flex justify-between py-1.5 border-b border-white/[0.05]">
                             <span className="text-slate-400">Debris Density Score</span>
-                            <span className="text-white">{(assessment.collision_analysis as any)?.components?.debris_risk?.score as number || 0}/30</span>
+                            <span className="text-white">{((assessment.collision_analysis?.components as Record<string, unknown> | undefined)?.debris_risk as Record<string, unknown> | undefined)?.score as number || 0}/30</span>
                           </div>
                           <div className="flex justify-between py-1.5">
                             <span className="text-slate-400">Objects in Orbit Shell</span>
-                            <span className="text-white">{(assessment.collision_analysis as any)?.congestion_context?.objects_in_shell as number || 0}</span>
+                            <span className="text-white">{(assessment.collision_analysis?.congestion_context as Record<string, unknown> | undefined)?.objects_in_shell as number || 0}</span>
                           </div>
                         </div>
                       </div>

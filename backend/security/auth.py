@@ -60,6 +60,10 @@ def membership(organization_id: int, user: dict = Depends(current_user)) -> dict
     return {'organization_id': organization_id, 'user_id': user['id'], 'role': row['role']}
 
 
+def active_membership(x_organization_id: int = Header(...), user: dict = Depends(current_user)) -> dict:
+    return membership(x_organization_id, user)
+
+
 def require_role(member: dict, allowed: set[str]) -> None:
     if member['role'] not in allowed:
         raise HTTPException(403, 'Insufficient workspace permission')
