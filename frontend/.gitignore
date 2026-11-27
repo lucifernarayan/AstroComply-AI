@@ -16,6 +16,9 @@
 # next.js
 /.next/
 /.next-verify/
+/.next-phase3/
+/test-results/
+/playwright-report/
 /out/
 
 # production

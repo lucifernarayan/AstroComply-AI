@@ -13,12 +13,12 @@ Database outages now return an unavailable catalogue response unless `ASTROCOMPL
 | `/health`, `/health/worker`, catalogue `/satellites`, catalogue `/metrics`, read-only `/analyze`, `/propagation/tle`, regulation search | Public catalogue and reference data. Do not submit private customer material. |
 | `/auth/register`, `/auth/login` | Public account entry. |
 | `/auth/me`, `/auth/logout`, `/organizations` | Authenticated user. |
-| `/organizations/{id}/fleet` and event reads | Organization member. Membership is checked in PostgreSQL. |
-| Fleet edits and event imports or status updates | Owner, administrator or operator of that organization. |
+| `/organizations/{id}/fleet`, `/orbital/positions`, element history, event reads, CDM versions and original CDM downloads | Organization member. Membership and resource ownership are checked in PostgreSQL. |
+| Fleet edits, TLE and CDM uploads, and event imports or status updates | Owner, administrator or operator of that organization. |
 | `/organizations/{id}/investigations` | Members may read. Analyst and above may submit or cancel queued jobs. All job reads filter by organization. |
 | `/organizations/{id}/investigations/{job}/report` | Organization member after job completion. Other organization IDs and job IDs return 404. |
-| `/organizations/{id}/reports/fleet.csv` and `/reports/events.csv` | Organization member. Queries filter every row by organization. |
+| `/organizations/{id}/reports/fleet.csv`, `/reports/events.csv`, `/reports/fleet.pdf`, `/reports/events/{event_id}.pdf` | Organization member. Queries filter every row by organization; event reports also check event ownership. |
 | `/assess` and `/uipath` | Organization membership selected by `X-Organization-Id`. Simulator jobs also check organization ownership. Submission allows analyst and above; approval and escalation require operator and above. |
 | `/analyze/bulk` and `/analyze/{id}?store=true` | Configured `ASTROCOMPLY_ADMIN_KEY` in `X-Admin-Key`. |
 
-The existing `/reports` page assembles downloaded text in the browser from assessment results and has no server-side report record. Durable organization-scoped report storage and access control remain required. The simulator keeps jobs in process memory, so its status does not survive restart.
+The workspace generates scoped PDFs on request. It does not persist generated PDF files or maintain a durable report job. The older `/reports` page still assembles assessment text in the browser. The simulator keeps jobs in process memory, so its status does not survive restart.
