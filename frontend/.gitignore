@@ -17,6 +17,7 @@
 /.next/
 /.next-verify/
 /.next-phase3/
+/.next-e2e/
 /test-results/
 /playwright-report/
 /out/

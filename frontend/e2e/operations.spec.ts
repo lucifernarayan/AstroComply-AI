@@ -107,4 +107,10 @@ test("operator journey, source versions, reports and tenant isolation", async ({
   await page.evaluate(() => sessionStorage.setItem("astrocomply_session", "expired.invalid.token"));
   await page.reload();
   await expect(page.getByRole("button", { name: "Sign in" })).toBeVisible();
+  await page.getByLabel("Email").fill(email);
+  await page.getByLabel("Password").fill(password);
+  await page.getByRole("button", { name: "Sign in", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Fleet assets" })).toBeVisible();
+  await page.getByRole("button", { name: "Sign out" }).click();
+  await expect(page.getByRole("button", { name: "Sign in", exact: true })).toBeVisible();
 });
