@@ -1,0 +1,10 @@
+*
+!requirements.txt
+!backend/
+!backend/**
+!knowledge_layer/
+!knowledge_layer/**
+!regulations/
+!regulations/**
+**/__pycache__/
+**/.env*

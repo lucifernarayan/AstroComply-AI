@@ -1,4 +1,4 @@
-const API_BASE = process.env.NEXT_PUBLIC_MOSIP_API_BASE ?? "https://mosip-backend-k55f.onrender.com";
+const API_BASE = process.env.NEXT_PUBLIC_MOSIP_API_BASE ?? (process.env.NODE_ENV === "development" ? "http://localhost:8000" : "https://mosip-backend-k55f.onrender.com");
 
 type FetchOptions = RequestInit & {
   timeoutMs?: number;
@@ -88,6 +88,7 @@ export type MetricsSummaryPayload = {
 };
 
 export type HealthPayload = {
+  demo_fallback_enabled?: boolean;
   status: string;
   version?: string;
   platform?: string;

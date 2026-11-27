@@ -52,12 +52,18 @@ def run_uipath_audit_background(job_id: str, raw_params: dict, risk_threshold: f
         state = run_full_assessment(raw_params=raw_params)
         formatted = _format_assessment(state)
 
+        if formatted["errors"]:
+            raise ValueError("Assessment incomplete. Review the failed steps before approval.")
+
         # Extract risk parameters
         risk_analysis = formatted.get("collision_analysis", {})
         risk_score = risk_analysis.get("risk_score")
         if risk_score is None:
-            risk_score = state.get("risk_data", {}).get("risk_score", 0.0)
+            risk_score = state.get("risk_data", {}).get("risk_score")
         risk_level = risk_analysis.get("risk_level") or state.get("risk_data", {}).get("risk_level", "LOW")
+
+        if risk_score is None or not formatted.get("compliance_analysis"):
+            raise ValueError("Risk and compliance evidence are required for approval.")
 
         # Extract compliance violations
         compliance_analysis = formatted.get("compliance_analysis", {})
@@ -218,10 +224,10 @@ def register_asset(payload: AssetRegisterRequest):
     }
 
 
-@router.post("/escalate", summary="Trigger emergency escalation / autonomous thruster maneuver")
+@router.post("/escalate", summary="Escalate a simulation for operator review")
 def escalate_job(payload: EscalateRequest):
     """
-    Sets the job status to ESCALATED and triggers emergency autonomous collision avoidance maneuvers.
+    Record a simulation escalation for operator review.
     """
     job_id = payload.job_id
     if job_id not in uipath_jobs:
@@ -231,18 +237,12 @@ def escalate_job(payload: EscalateRequest):
     uipath_jobs[job_id]["escalation_reason"] = payload.reason
     uipath_jobs[job_id]["updated_at"] = datetime.utcnow().isoformat()
 
-    maneuver_log = [
-        "SLA breach detected or manual override triggered.",
-        "Executing emergency collision avoidance maneuvers.",
-        "Calculated optimal thrust vector Delta-V: 0.14 m/s.",
-        "Dispatched autonomous fire sequence commands to onboard thrusters.",
-        "Maneuver executed successfully. Collision probability reduced below safety limit."
-    ]
+    maneuver_log = ["Simulation escalated for operator review."]
 
     return {
         "status": "ESCALATED",
         "job_id": job_id,
-        "maneuvers_executed": True,
+        "maneuvers_executed": False,
         "maneuver_details": maneuver_log,
         "updated_at": uipath_jobs[job_id]["updated_at"]
     }

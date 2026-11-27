@@ -1,4 +1,10 @@
-# 🛰️ AstroComply AI: Autonomous Space Mission Licensing & Regulatory Approval
+# AstroComply AI
+
+AstroComply combines a public satellite catalogue, derived orbital metrics, regulatory document search and an experimental LangGraph assessment workflow. The current licensing simulator uses illustrative payment and registry responses. The [product audit](docs/PRODUCT_AUDIT.md) records verified behavior and limitations. [Architecture](docs/ARCHITECTURE.md), [data sources](docs/DATA_SOURCES.md), [API guide](docs/API_GUIDE.md), [security status](docs/SECURITY.md), [deployment](docs/DEPLOYMENT.md), [agent execution](docs/AGENT_ARCHITECTURE.md) and the [roadmap](docs/IMPLEMENTATION_ROADMAP.md) describe the path to an operator pilot.
+
+For a local disposable stack, run `docker compose up --build`. The PostgreSQL schema initializes on a fresh volume. Import the bundled CelesTrak GP JSON with `python -m backend.ingestion.load_celestrak_snapshot` using the API's `DATABASE_URL`. Start the Next.js frontend with `cd frontend` followed by `npm ci` and `npm run dev`. Run backend checks with `pytest backend` against a disposable database, and run `npm run build` in `frontend`. The API docs are available at `/docs`.
+
+Set `DATABASE_URL` for PostgreSQL and `NEXT_PUBLIC_MOSIP_API_BASE` for the frontend API hostname. `GROQ_API_KEY` enables LLM interpretation. `ASTROCOMPLY_DEMO_FALLBACK=true` explicitly allows synthetic catalogue fallback during an outage. SGP4 accepts user-supplied TLEs through `/propagation/tle`. Outputs are predicted TEME states whose quality depends on element age. The application does not calculate a validated collision probability from the current catalogue.
 
 AstroComply AI is an enterprise-grade process orchestration platform designed for the **UiPath AgentHack** competition. It automates space mission licensing and satellite regulatory compliance audits by coordinating AI agents, RPA bots, Document Understanding, and human review under a unified execution plane.
 

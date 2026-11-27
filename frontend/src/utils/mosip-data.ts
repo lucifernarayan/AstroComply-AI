@@ -53,6 +53,7 @@ export type NavItem = {
 
 export const navItems: NavItem[] = [
   { href: "/", label: "Mission Control", eyebrow: "Live orbit map", icon: Globe2 },
+  { href: "/workspace", label: "Workspace", eyebrow: "Your fleet", icon: Orbit },
   { href: "/satellites", label: "Satellite Intel", eyebrow: "NORAD assessment", icon: Radar },
   { href: "/simulator", label: "Simulator", eyebrow: "Pre-launch what-if", icon: Gauge },
   { href: "/regulations", label: "Regulations", eyebrow: "Semantic retrieval", icon: BookOpen },

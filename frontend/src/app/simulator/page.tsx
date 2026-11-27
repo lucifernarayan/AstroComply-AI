@@ -177,11 +177,11 @@ export default function SimulatorPage() {
   // Handle SLA timeout automatically
   const handleSlaTimeout = async () => {
     if (!currentJobId) return;
-    addLog("⚠️ SLA DEADLINE BREACHED! Auto-escalating to Emergency Thruster Avoidance Protocol...");
+    addLog("⚠️ SLA DEADLINE BREACHED! Escalating simulated job for operator review.");
     try {
       const esc = await escalateUiPathJob(currentJobId, "SLA Timeout (15 minutes breached in Action Center)");
       setUiSimStatus("escalated");
-      addLog(`🔥 EMERGENCY: Escalation state active. Maneuvers initiated:`);
+      addLog(`🔥 EMERGENCY: Simulation escalated for review.`);
       esc.maneuver_details.forEach(detail => addLog(`   └ ${detail}`));
       
       // Update job details to show Escalated
@@ -401,7 +401,7 @@ export default function SimulatorPage() {
     try {
       const esc = await escalateUiPathJob(currentJobId, "Force Override by Human Inspector");
       setUiSimStatus("escalated");
-      addLog(`🔥 ESCALATION ACTIVE. maneuvers initiated:`);
+      addLog(`🔥 Simulation escalated for review.`);
       esc.maneuver_details.forEach(detail => addLog(`   └ ${detail}`));
 
       // Update job details to show Escalated
@@ -1014,7 +1014,7 @@ export default function SimulatorPage() {
 
                     {uiSimStatus === "escalated" ? (
                       <div className="bg-[#ff3366]/10 border border-[#ff3366]/30 text-[#ff3366] rounded p-4 text-center font-digital text-[10px] uppercase tracking-wider flex items-center justify-center gap-2">
-                        <ShieldAlert size={14} className="animate-ping" /> Emergency SLA Escalation Active: Autonomous maneuvers completed.
+                        <ShieldAlert size={14} className="animate-ping" /> Simulation escalated for operator review.
                       </div>
                     ) : (
                       <div className="flex gap-3 pt-2">

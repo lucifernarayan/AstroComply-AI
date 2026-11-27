@@ -154,7 +154,7 @@ def sustainability_only(norad_id: int):
 @router.get(
     "/{norad_id}/forecast",
     summary="Forecast assessment only",
-    description="Runs Forecast Agent — 5/10/25-year debris and collision probability projections.",
+    description="Runs Forecast Agent — 5/10/25-year illustrative shell population projections.",
 )
 def forecast_only(norad_id: int):
     return run_agent_only("forecast", norad_id=norad_id)

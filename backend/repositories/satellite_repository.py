@@ -5,38 +5,7 @@ from backend.database.db import engine
 logger = logging.getLogger(__name__)
 
 # Fallback mock satellites list in case PostgreSQL database is offline
-def get_mock_satellites():
-    try:
-        from knowledge_layer.db_service import MOCK_SATELLITES
-        return MOCK_SATELLITES
-    except Exception:
-        # Emergency backup if import fails
-        return [
-            {
-                "id": 1, "norad_id": 25544, "object_name": "ISS (ZARYA)", "object_id": "1998-067A",
-                "inclination": 51.64, "eccentricity": 0.0008, "mean_motion": 15.49, "bstar": 0.0001,
-                "altitude_km": 420.0, "apogee_km": 423.0, "perigee_km": 417.0, "orbit_type": "LEO",
-                "risk_score": 42.0, "risk_level": "MEDIUM"
-            },
-            {
-                "id": 2, "norad_id": 43013, "object_name": "SENTINEL-5P", "object_id": "2017-064A",
-                "inclination": 98.7, "eccentricity": 0.0001, "mean_motion": 14.2, "bstar": 0.00005,
-                "altitude_km": 824.0, "apogee_km": 825.0, "perigee_km": 823.0, "orbit_type": "LEO",
-                "risk_score": 63.0, "risk_level": "HIGH"
-            },
-            {
-                "id": 3, "norad_id": 40294, "object_name": "HIMAWARI-8", "object_id": "2014-060A",
-                "inclination": 0.05, "eccentricity": 0.0002, "mean_motion": 1.0, "bstar": 0.0,
-                "altitude_km": 35786.0, "apogee_km": 35790.0, "perigee_km": 35782.0, "orbit_type": "GEO",
-                "risk_score": 18.0, "risk_level": "LOW"
-            },
-            {
-                "id": 4, "norad_id": 33591, "object_name": "NOAA-19", "object_id": "2009-005A",
-                "inclination": 99.2, "eccentricity": 0.0012, "mean_motion": 14.1, "bstar": 0.0002,
-                "altitude_km": 870.0, "apogee_km": 878.0, "perigee_km": 862.0, "orbit_type": "LEO",
-                "risk_score": 78.0, "risk_level": "CRITICAL"
-            }
-        ]
+from backend.database.catalogue import get_mock_satellites
 
 
 class SatelliteRepository:

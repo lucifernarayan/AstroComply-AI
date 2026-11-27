@@ -11,6 +11,7 @@ python-dotenv==1.0.1
 
 # ── Data ──────────────────────────────────────────────────────────────────────
 requests==2.32.3
+sgp4==2.27
 pandas==2.2.3
 numpy>=1.26.0
 
@@ -23,3 +24,4 @@ langchain-core>=0.3.29
 langchain-groq==0.2.3
 langgraph==0.2.60
 groq==0.13.0
+email-validator==2.3.0

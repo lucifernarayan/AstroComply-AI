@@ -73,7 +73,7 @@ SUSTAINABILITY:
 FORECAST (25 years):
 - Projected risk score: {forecast_25.get("projected_risk_score", "N/A")}
 - Shell growth: {forecast_25.get("shell_growth_pct", "N/A")}%
-- Collision probability: {forecast_25.get("projected_collision_prob_per_yr", "N/A")}
+- Insufficient data for reliable probability-of-collision estimation.
 
 Generate specific mitigation recommendations as valid JSON:
 {{

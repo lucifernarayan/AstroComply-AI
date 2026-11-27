@@ -54,6 +54,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       className="flex h-screen overflow-hidden"
       style={{ background: "var(--c-base)" }}
     >
+      {health?.demo_fallback_enabled && (
+        <div role="status" className="fixed bottom-2 right-2 z-50 bg-amber-200 px-3 py-2 text-xs text-black">
+          Demo mode · Catalogue results may include synthetic records
+        </div>
+      )}
       {/* ══════════════════════════════════════════════════════
           PERSISTENT LEFT NAV RAIL
           Always visible, icon + label, never collapses on desktop

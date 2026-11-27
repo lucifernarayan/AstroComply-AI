@@ -127,7 +127,6 @@ export function GlobeWrapper({ satellites, selectedId, onSelect, orbitPath }: Gl
   const globeRef = useRef<any>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
-  const [dataAge, setDataAge] = useState(0);
   const [localTime, setLocalTime] = useState(0);
   const moonRef = useRef<THREE.Mesh | null>(null);
 
@@ -139,13 +138,6 @@ export function GlobeWrapper({ satellites, selectedId, onSelect, orbitPath }: Gl
     }, 50);
     return () => clearInterval(interval);
   }, []);
-
-  // Data freshness ticker
-  useEffect(() => {
-    setDataAge(0);
-    const id = setInterval(() => setDataAge((p) => p + 1), 1000);
-    return () => clearInterval(id);
-  }, [satellites.length]);
 
   const arcs = useMemo(
     () =>
@@ -410,11 +402,6 @@ export function GlobeWrapper({ satellites, selectedId, onSelect, orbitPath }: Gl
     return list;
   }, [orbitPath, issOrbitPath]);
 
-  const formatAge = (s: number) => {
-    if (s < 60) return `${s}s`;
-    return `${Math.floor(s / 60)}m ${s % 60}s`;
-  };
-
   return (
     <div ref={containerRef} className="relative h-full w-full overflow-hidden" style={{ minHeight: 420 }}>
       {/* Deep space glow */}
@@ -516,7 +503,7 @@ export function GlobeWrapper({ satellites, selectedId, onSelect, orbitPath }: Gl
             className="text-[8px] uppercase tracking-[0.25em]"
             style={{ color: "rgba(77,217,245,0.3)" }}
           >
-            ORBITAL DATA — UPDATED {formatAge(dataAge)} AGO
+            SIMULATED ORBIT GEOMETRY
           </span>
           <span className="pulse-dot" style={{ background: "var(--c-nominal)" }} />
         </div>

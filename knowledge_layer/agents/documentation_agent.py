@@ -76,7 +76,7 @@ Footprint: {sustain.get("orbital_footprint_score", "N/A")}/40 | Burden: {sustain
 
 === FORECAST INTELLIGENCE ===
 5yr: Risk score → {forecast_5.get("projected_risk_score", "N/A")} | Shell growth: +{forecast_5.get("shell_growth_pct", "N/A")}%
-25yr: Risk score → {forecast_25.get("projected_risk_score", "N/A")} | Col. prob: {forecast_25.get("projected_collision_prob_per_yr", "N/A")}
+25yr: Risk score → {forecast_25.get("projected_risk_score", "N/A")} | Insufficient data for reliable probability-of-collision estimation.
 Kessler risk: {forecast.get("kessler_syndrome_risk", "N/A")}
 
 === MITIGATION INTELLIGENCE ===
