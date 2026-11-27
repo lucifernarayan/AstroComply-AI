@@ -15,6 +15,7 @@ services:
       - pg_data:/var/lib/postgresql/data
       - ./backend/database/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
       - ./backend/database/migrations/001_workspaces.sql:/docker-entrypoint-initdb.d/02-workspaces.sql:ro
+      - ./backend/database/migrations/002_events.sql:/docker-entrypoint-initdb.d/03-events.sql:ro
 
   qdrant:
     image: qdrant/qdrant:latest

@@ -6,6 +6,6 @@
 | 2 | Repair local startup and schema initialization. Introduce versioned migrations and fixture-backed tests. | Empty disposable PostgreSQL starts, imports the bundled snapshot and serves a browser search. Replay and stale imports leave current state intact. |
 | 3 | Extend implemented account sessions and fleet isolation to jobs, exports and notes. | Two organizations cannot access each other's assets, jobs, exports or notes through any route. |
 | 4 | Add versioned provider records and validated SGP4 propagation. Replace illustrative globe coordinates. | Published reference vectors match within documented tolerance. Every plotted state has epoch, frame and source. |
-| 5 | Add CDM import, event history and operator review. | An imported event retains original values, units and source. Missing covariance remains visible. |
+| 5 | Extend the implemented provider event summary import with formal CDM parsing, event history and assignment. | An imported event retains original values, units and source. Missing covariance remains visible. |
 | 6 | Move assessments to durable jobs and record citations and tool traces. | A provider timeout produces a recoverable partial result. Restart preserves the evidence and job state. |
 | 7 | Connect reports, notifications and API credentials to workspace permissions. | A user completes fleet import, profile inspection, investigation and evidence-backed export in a browser test. |

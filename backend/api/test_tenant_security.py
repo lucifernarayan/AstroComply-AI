@@ -25,6 +25,21 @@ def test_account_and_workspace_isolation():
     assert client.patch(f'/organizations/{first_id}/fleet/{asset_id}', json={'display_name': 'Hijacked'}, headers=headers[1]).status_code == 404
     assert client.delete(f'/organizations/{first_id}/fleet/{asset_id}', headers=headers[1]).status_code == 404
     assert client.get(f'/organizations/{first_id}/fleet/{asset_id}', headers=headers[0]).status_code == 200
+    event = client.post(f'/organizations/{first_id}/events', headers=headers[0], json={
+        'source':'customer-CDM', 'external_id':str(uuid4()), 'primary_norad':900,
+        'secondary_norad':901, 'tca':'2026-12-01T12:00:00Z', 'miss_distance_m':840,
+    })
+    assert event.status_code == 201, event.text
+    assert 'Insufficient data' in event.json()['probability_status']
+    assert client.post(f'/organizations/{first_id}/events', headers=headers[0], json={
+        'source':'customer-CDM', 'external_id':str(uuid4()), 'tca':'2026-12-01T12:00:00Z',
+        'collision_probability':0.001,
+    }).status_code == 422
+    event_id = event.json()['id']
+    assert client.get(f'/organizations/{first_id}/events/{event_id}', headers=headers[1]).status_code == 404
+    assert client.get(f'/organizations/{second_id}/events/{event_id}', headers=headers[1]).status_code == 404
+    assert client.patch(f'/organizations/{first_id}/events/{event_id}', headers=headers[1],
+        json={'status':'resolved'}).status_code == 404
     with engine.begin() as connection:
         connection.execute(text("UPDATE memberships SET role='viewer' WHERE organization_id=:org"), {'org': first_id})
     assert client.get(f'/organizations/{first_id}/fleet/{asset_id}', headers=headers[0]).status_code == 200

@@ -5,7 +5,7 @@ from backend.database.catalogue import CatalogueUnavailable, demo_fallback_enabl
 from fastapi.middleware.cors import CORSMiddleware
 from backend.api.routes import satellites, metrics, analysis, health, regulations, uipath
 from backend.api.routes import assess
-from backend.api.routes import propagation, auth, workspaces
+from backend.api.routes import propagation, auth, workspaces, events
 
 app = FastAPI(
     title="MOSIP API",
@@ -46,6 +46,7 @@ app.add_middleware(
 # ── Existing routes ───────────────────────────────────────────────────────────
 app.include_router(auth.router, prefix="/auth", tags=["Authentication"])
 app.include_router(workspaces.router, prefix="/organizations", tags=["Workspaces"])
+app.include_router(events.router, prefix="/organizations", tags=["Conjunction events"])
 app.include_router(health.router,     tags=["Health"])
 app.include_router(satellites.router, prefix="/satellites", tags=["Satellites"])
 app.include_router(analysis.router,   prefix="/analyze",    tags=["Analysis"])

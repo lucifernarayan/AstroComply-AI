@@ -5,3 +5,5 @@ Use `docker compose up --build` from the repository root for disposable local se
 Schema initialization only runs when PostgreSQL creates an empty data directory. Existing volumes need `python -m backend.database.migrate` with a database backup and a staging verification first. The additive `001_workspaces.sql` migration creates account, membership, session, fleet and audit tables. Preserve the deployed Render and Vercel environment values until a staging check confirms the selected API hostname, CORS, database schema and job behavior.
 
 Set `ASTROCOMPLY_CORS_ORIGINS` to a comma-separated list of exact frontend origins. The default includes localhost port 3000 and the existing Vercel hostname. Apply the workspace migration on a staging copy before exposing account endpoints. Session records are stored in PostgreSQL.
+
+The additive `002_events.sql` migration adds organization-scoped conjunction event records. Apply both migrations in order with the migration runner. Fresh Compose volumes execute the schema and both migrations during PostgreSQL initialization.
