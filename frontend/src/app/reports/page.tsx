@@ -195,10 +195,10 @@ function ReportCenterContent() {
     if (!reportText || !selectedSat) return;
     const w = window.open("", "_blank");
     if (!w) return;
-    w.document.write(`<html><head><title>MOSIP Report - ${satelliteName(selectedSat)}</title>
-      <style>body{background:#04050a;color:#8899aa;font-family:'Courier New',monospace;font-size:11px;padding:32px;white-space:pre-wrap;line-height:1.8}</style>
-      </head><body>${reportText.replace(/[&<>]/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" })[char] || char)}</body></html>`);
-    w.document.close();
+    w.opener = null;
+    w.document.title = `MOSIP Report - ${satelliteName(selectedSat)}`;
+    w.document.body.style.cssText = "font: 11pt monospace; padding: 32px; white-space: pre-wrap; line-height: 1.8";
+    w.document.body.textContent = reportText;
     w.print();
   };
 

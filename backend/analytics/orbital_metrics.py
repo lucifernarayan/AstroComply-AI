@@ -4,18 +4,7 @@ from backend.database.db import engine
 
 logger = logging.getLogger(__name__)
 
-def get_mock_satellites():
-    try:
-        from knowledge_layer.db_service import MOCK_SATELLITES
-        return MOCK_SATELLITES
-    except Exception:
-        # Fallback list if import fails
-        return [
-            {"norad_id": 25544, "object_name": "ISS (ZARYA)", "orbit_type": "LEO", "altitude_km": 420.0, "risk_score": 42.0, "risk_level": "MEDIUM"},
-            {"norad_id": 43013, "object_name": "SENTINEL-5P", "orbit_type": "LEO", "altitude_km": 824.0, "risk_score": 63.0, "risk_level": "HIGH"},
-            {"norad_id": 40294, "object_name": "HIMAWARI-8", "orbit_type": "GEO", "altitude_km": 35786.0, "risk_score": 18.0, "risk_level": "LOW"},
-            {"norad_id": 33591, "object_name": "NOAA-19", "orbit_type": "LEO", "altitude_km": 870.0, "risk_score": 78.0, "risk_level": "CRITICAL"}
-        ]
+from backend.database.catalogue import get_mock_satellites
 
 
 class OrbitalMetrics:

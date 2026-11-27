@@ -13,6 +13,7 @@ services:
       - "5432:5432"
     volumes:
       - pg_data:/var/lib/postgresql/data
+      - ./backend/database/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
 
   qdrant:
     image: qdrant/qdrant:latest
@@ -46,7 +47,7 @@ services:
   frontend:
     build:
       context: ./frontend
-      dockerfile: frontend/Dockerfile
+      dockerfile: Dockerfile
       args:
         # NEXT_PUBLIC_ variables are baked in at build time. For client-side requests, 
         # this must point to the URL accessible by the browser (e.g., http://localhost:8000 

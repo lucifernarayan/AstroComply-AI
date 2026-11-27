@@ -11,7 +11,6 @@ import json
 import math
 import re
 import logging
-from qdrant_client import QdrantClient
 from backend.config import QDRANT_PATH, QDRANT_COLLECTION
 
 logger = logging.getLogger(__name__)
@@ -22,7 +21,9 @@ _client = None
 def _get_client():
     global _client
     if _client is None:
-        _client = QdrantClient(path=QDRANT_PATH)
+        from qdrant_client import QdrantClient
+        host = os.getenv("QDRANT_HOST")
+        _client = QdrantClient(url=host, timeout=3) if host else QdrantClient(path=QDRANT_PATH)
     return _client
 
 # ── Pure-Python Memory-Efficient TF-IDF RAG Engine ──────────────────────────

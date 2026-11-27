@@ -5,7 +5,7 @@ Forecast Agent — Tool projections + LLM interpretation.
 
 Tool layer:
   - Computes 5/10/25-year debris population growth estimates
-  - Projects collision probability trend
+  - Reports unavailable collision probability when uncertainty inputs are missing
   - Estimates future sustainability state
 
 LLM layer:
@@ -37,35 +37,11 @@ ANNUAL_DEBRIS_GROWTH = {
     "UNKNOWN": 0.03,
 }
 
-# Baseline collision probability per year (rough estimates by orbit type)
-BASELINE_COLLISION_PROB = {
-    "VLEO":    0.001,
-    "LEO":     0.003,
-    "MEO":     0.0005,
-    "GEO":     0.001,
-    "HEO":     0.0002,
-    "UNKNOWN": 0.001,
-}
-
-
 def _project_population(orbit_type: str, current_count: int, years: int) -> int:
     """Compound growth projection for object count in this orbital shell."""
     rate = ANNUAL_DEBRIS_GROWTH.get(orbit_type, 0.03)
     projected = int(current_count * ((1 + rate) ** years))
     return projected
-
-
-def _project_collision_prob(orbit_type: str, risk_score: float, years: int) -> float:
-    """
-    Annual collision probability projection.
-    Scales with debris growth and current risk score.
-    """
-    base = BASELINE_COLLISION_PROB.get(orbit_type, 0.001)
-    growth = ANNUAL_DEBRIS_GROWTH.get(orbit_type, 0.03)
-    risk_multiplier = (risk_score / 50.0) if risk_score else 1.0  # normalise around 50
-
-    projected = base * risk_multiplier * ((1 + growth) ** years)
-    return round(min(projected, 1.0), 6)
 
 
 def _kessler_risk(orbit_type: str, current_count: int,
@@ -101,14 +77,13 @@ def run_forecast_agent(state: MOSIPState) -> dict:
     projections = {}
     for years in [5, 10, 25]:
         pop_projected  = _project_population(orbit_type, current_count, years)
-        col_prob       = _project_collision_prob(orbit_type, risk_score, years)
         risk_projected = min(100, risk_score * (1 + ANNUAL_DEBRIS_GROWTH.get(orbit_type, 0.03)) ** years)
 
         projections[f"{years}yr"] = {
             "year":                        datetime.utcnow().year + years,
             "projected_objects_in_shell":  pop_projected,
             "shell_growth_pct":            round(((pop_projected - current_count) / max(current_count, 1)) * 100, 1),
-            "projected_collision_prob_per_yr": col_prob,
+            "projected_collision_prob_per_yr": None,
             "projected_risk_score":        round(risk_projected, 1),
         }
 
@@ -128,17 +103,14 @@ Total tracked satellites: {total_sats}
 
 5-year projection:
   - Objects in shell: {projections["5yr"]["projected_objects_in_shell"]}
-  - Collision probability/yr: {projections["5yr"]["projected_collision_prob_per_yr"]:.5%}
   - Projected risk score: {projections["5yr"]["projected_risk_score"]}
 
 10-year projection:
   - Objects in shell: {projections["10yr"]["projected_objects_in_shell"]}
-  - Collision probability/yr: {projections["10yr"]["projected_collision_prob_per_yr"]:.5%}
   - Projected risk score: {projections["10yr"]["projected_risk_score"]}
 
 25-year projection:
   - Objects in shell: {projections["25yr"]["projected_objects_in_shell"]}
-  - Collision probability/yr: {projections["25yr"]["projected_collision_prob_per_yr"]:.5%}
   - Projected risk score: {projections["25yr"]["projected_risk_score"]}
 
 Kessler risk assessment: {kessler}
@@ -147,24 +119,24 @@ Write a 3-4 sentence forecast interpretation covering:
 1. The trajectory of orbital congestion for this satellite's shell
 2. When (if ever) the situation becomes critical
 3. What would change the forecast most (e.g., increased compliance, ADR missions)
-Be specific and technical. No bullet points.
+Do not estimate collision probability. Be specific and technical. No bullet points.
 """
         msg = llm.invoke([
             SystemMessage(content="You are a space sustainability forecaster. Write concise, data-driven forecasts."),
             HumanMessage(content=prompt),
         ])
         interpretation = msg.content.strip()
-    except Exception as e:
+    except Exception:
         interpretation = (
-            f"Forecast computed without LLM. By 2049 ({25} years), "
+            f"Forecast computed without LLM. Over 25 years, "
             f"the {orbit_type} shell is projected to grow by "
             f"{projections['25yr']['shell_growth_pct']:.0f}%. "
-            f"Collision probability rises to {projections['25yr']['projected_collision_prob_per_yr']:.4%}/yr. "
-            f"LLM unavailable: {str(e)[:80]}"
+            "This is an illustrative growth scenario."
         )
 
     forecast = {
         "orbit_type":              orbit_type,
+        "collision_probability_status": "Insufficient data for reliable probability-of-collision estimation.",
         "baseline_risk_score":     risk_score,
         "kessler_syndrome_risk":   kessler,
         "projections":             projections,
@@ -173,7 +145,7 @@ Be specific and technical. No bullet points.
             f"Annual debris growth rate: {ANNUAL_DEBRIS_GROWTH.get(orbit_type, 0.03)*100:.1f}%/yr in {orbit_type}",
             "No active debris removal missions assumed",
             "Current disposal compliance rates maintained",
-            "Based on ESA/IADC debris environment models",
+            "Illustrative constant-growth scenario; coefficients are unvalidated",
         ],
     }
 
@@ -183,7 +155,6 @@ Be specific and technical. No bullet points.
         "timestamp": datetime.utcnow().isoformat(),
         "summary": (
             f"25yr outlook: Shell grows {projections['25yr']['shell_growth_pct']:.0f}% | "
-            f"Collision prob: {projections['25yr']['projected_collision_prob_per_yr']:.4%}/yr | "
             f"Kessler: {kessler[:30]}..."
         ),
     }

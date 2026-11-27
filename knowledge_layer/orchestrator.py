@@ -128,35 +128,37 @@ def documentation_node(state: MOSIPState) -> dict:
 
 # ── Build the LangGraph graph ─────────────────────────────────────────────────
 
-def _build_mosip_graph() -> StateGraph:
+# One graph per requested stopping point keeps specialist queries bounded.
+from functools import lru_cache
+
+PIPELINE = (
+    ("orbital", orbital_node), ("collision", collision_node),
+    ("compliance", compliance_node), ("sustainability", sustainability_node),
+    ("forecast_agent", forecast_node), ("mitigation", mitigation_node),
+    ("documentation", documentation_node),
+)
+
+
+@lru_cache(maxsize=len(PIPELINE))
+def _build_mosip_graph(stop_after="documentation"):
     graph = StateGraph(MOSIPState)
-
-    # Register nodes
-    graph.add_node("gather",          gather_node)
-    graph.add_node("orbital",         orbital_node)
-    graph.add_node("collision",       collision_node)
-    graph.add_node("compliance",      compliance_node)
-    graph.add_node("sustainability",  sustainability_node)
-    graph.add_node("forecast_agent",  forecast_node)
-    graph.add_node("mitigation",      mitigation_node)
-    graph.add_node("documentation",   documentation_node)
-
-    # Sequential pipeline edges
+    graph.add_node("gather", gather_node)
     graph.set_entry_point("gather")
-    graph.add_edge("gather",         "orbital")
-    graph.add_edge("orbital",        "collision")
-    graph.add_edge("collision",      "compliance")
-    graph.add_edge("compliance",     "sustainability")
-    graph.add_edge("sustainability",  "forecast_agent")
-    graph.add_edge("forecast_agent",  "mitigation")
-    graph.add_edge("mitigation",     "documentation")
-
-    graph.add_edge("documentation",  END)
-
+    previous = "gather"
+    for name, node in PIPELINE:
+        graph.add_node(name, node)
+        if previous == "gather":
+            graph.add_conditional_edges("gather", lambda state: "failed" if state.get("errors") else "ready",
+                                        {"failed": END, "ready": name})
+        else:
+            graph.add_edge(previous, name)
+        previous = name
+        if name == stop_after:
+            break
+    graph.add_edge(previous, END)
     return graph.compile()
 
 
-# Compiled graph — import and use this
 mosip_graph = _build_mosip_graph()
 
 
@@ -165,6 +167,7 @@ mosip_graph = _build_mosip_graph()
 def run_full_assessment(
     norad_id: int | None = None,
     raw_params: dict | None = None,
+    *, stop_after: str = "documentation",
 ) -> dict:
     """
     Run the full MOSIP multi-agent pipeline.
@@ -198,7 +201,7 @@ def run_full_assessment(
         "errors":                 [],
     }
 
-    final_state = mosip_graph.invoke(initial_state)
+    final_state = _build_mosip_graph(stop_after).invoke(initial_state)
     return dict(final_state)
 
 
@@ -213,8 +216,8 @@ def run_agent_only(
     agent options: "orbital", "collision", "compliance",
                    "sustainability", "forecast", "mitigation", "documentation"
     """
-    # Run full pipeline but return only that agent's output key
-    full = run_full_assessment(norad_id=norad_id, raw_params=raw_params)
+    stop_after = "forecast_agent" if agent == "forecast" else agent
+    full = run_full_assessment(norad_id=norad_id, raw_params=raw_params, stop_after=stop_after)
 
     agent_key_map = {
         "orbital":        "orbital_analysis",

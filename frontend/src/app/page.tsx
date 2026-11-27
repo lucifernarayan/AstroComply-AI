@@ -316,11 +316,11 @@ export default function AstroComplyDashboardPage() {
           <div className="absolute top-4 left-4 z-20 pointer-events-none">
             <div className="flex flex-col gap-0.5">
               <span className="font-data text-[7px] uppercase tracking-[0.35em]" style={{ color: "rgba(77,217,245,0.4)" }}>
-                ASTROCOMPLY AI REAL-TIME SCANNER
+                ILLUSTRATIVE POSITIONS · 150× SPEED
               </span>
               <div className="flex items-center gap-1.5 mt-0.5">
                 <span className="font-display text-[15px] uppercase tracking-wider text-white" style={{ textShadow: "0 0 20px rgba(255,255,255,0.4)" }}>
-                  ORBITAL MONITOR
+                  ORBIT SIMULATION
                 </span>
                 <span className="h-1.5 w-1.5 rounded-full bg-[#00d4ff] animate-ping" />
               </div>
@@ -384,7 +384,7 @@ export default function AstroComplyDashboardPage() {
           {/* UiPath BPMN Process Stepper Component */}
           <div className="px-5 py-4 shrink-0 bg-[#0e0e1a]/40 border-b border-white/[0.05]">
             <div className="flex items-center justify-between mb-3">
-              <span className="font-digital text-[8px] text-slate-500 uppercase tracking-widest">Maestro BPMN 2.0 Live Track</span>
+              <span className="font-digital text-[8px] text-slate-500 uppercase tracking-widest">Illustrative workflow</span>
               <span className="font-digital text-[9px] text-[#00d4ff] uppercase font-bold">
                 {maestroStep === 2 ? "STOPPED @ SAP FEE CHECK" : maestroStep === 4 ? "HELD @ ACTION CENTER" : "COMPLETED & REGISTERED"}
               </span>

@@ -12,11 +12,10 @@ import {
   ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip,
   LineChart, Line,
 } from "recharts";
-import { agentTimeline, sourceColor } from "@/utils/mosip-data";
+import { sourceColor } from "@/utils/mosip-data";
 import { assessNorad, searchSatellites, type AssessmentPayload, type RegulationSearchResult, type SatelliteSummary } from "@/utils/api";
 import { DashboardCard } from "@/components/DashboardCard";
 
-const agentIcons = [Brain, Cpu, ShieldCheck, Gauge, TrendingUp, Target, FileText, CheckCircle];
 
 type AssessmentTab = "risk" | "compliance" | "sustainability" | "forecast" | "recommendations";
 
@@ -103,109 +102,23 @@ function getComplianceGrade(score: number): string {
 }
 
 /* ── Agent Timeline Component ─────────────────────────────────────────────── */
-function AgentTimeline({ active }: { active: boolean }) {
-  const [completedCount, setCompletedCount] = useState(0);
-
-  useEffect(() => {
-    if (!active) {
-      const reset = setTimeout(() => setCompletedCount(0), 0);
-      return () => clearTimeout(reset);
-    }
-    let i = 0;
-    const interval = setInterval(() => {
-      i++;
-      setCompletedCount(i);
-      if (i >= agentTimeline.length) clearInterval(interval);
-    }, 350);
-    return () => clearInterval(interval);
-  }, [active]);
-
+function AgentTimeline({ steps }: { steps: NonNullable<AssessmentPayload["agent_timeline"]> }) {
   return (
-    <div
-      className="rounded overflow-hidden"
-      style={{ background: "var(--c-surface-0)", border: "1px solid var(--c-border)", padding: "16px" }}
-    >
-      <div className="mb-4">
-        <span className="label block mb-0.5">LANGGRAPH PIPELINE</span>
-        <h3 className="font-display text-[11px] uppercase tracking-wider" style={{ color: "var(--t-primary)" }}>
-          8-AGENT SEQUENTIAL EXECUTION
-        </h3>
-      </div>
-      <div className="flex items-center overflow-x-auto pb-2">
-        {agentTimeline.map((agent, i) => {
-          const Icon = agentIcons[i];
-          const done = completedCount > i;
-          const active_node = active && completedCount === i;
-          return (
-            <div key={agent.name} className="flex items-center shrink-0">
-              <motion.div
-                className="flex flex-col items-center gap-1"
-                initial={{ opacity: 0, scale: 0.5 }}
-                animate={{ opacity: active ? 1 : 0.4, scale: active ? 1 : 0.9 }}
-                transition={{ delay: i * 0.35, duration: 0.3 }}
-              >
-                <div
-                  className="relative flex h-9 w-9 items-center justify-center rounded-full transition-all duration-500"
-                  style={{
-                    border: `1px solid ${done ? "var(--c-nominal)" : active_node ? "var(--c-cyan)" : "rgba(255,255,255,0.1)"}`,
-                    background: done ? "rgba(61,232,155,0.07)" : active_node ? "var(--c-cyan-ghost)" : "rgba(255,255,255,0.02)",
-                    boxShadow: done ? "0 0 8px rgba(61,232,155,0.18)" : active_node ? "0 0 8px rgba(77,217,245,0.15)" : "none",
-                  }}
-                >
-                  <Icon
-                    size={13}
-                    style={{
-                      color: done ? "var(--c-nominal)" : active_node ? "var(--c-cyan)" : "var(--t-meta)",
-                    }}
-                  />
-                  {done && (
-                    <motion.div
-                      initial={{ scale: 0, opacity: 0 }}
-                      animate={{ scale: 1, opacity: 1 }}
-                      className="absolute -top-0.5 -right-0.5 flex h-3.5 w-3.5 items-center justify-center rounded-full"
-                      style={{ background: "var(--c-nominal)" }}
-                    >
-                      <CheckCircle size={8} style={{ color: "#040508" }} />
-                    </motion.div>
-                  )}
-                </div>
-                <span
-                  className="font-data text-[7px] uppercase tracking-wider text-center max-w-[44px] leading-tight"
-                  style={{ color: done ? "var(--t-secondary)" : "var(--t-meta)" }}
-                >
-                  {agent.name}
-                </span>
-                <span className="font-data text-[6px]" style={{ color: "var(--t-meta)" }}>{agent.latency}</span>
-              </motion.div>
-              {i < agentTimeline.length - 1 && (
-                <div
-                  className="mx-1 h-px w-6 shrink-0"
-                  style={{ background: done ? "rgba(61,232,155,0.25)" : "var(--c-border)" }}
-                />
-              )}
-            </div>
-          );
-        })}
-      </div>
-    </div>
+    <section className="border border-slate-800 p-4" aria-label="Assessment execution">
+      <h3 className="label mb-3">Assessment execution</h3>
+      {steps.length === 0 && <p>No execution steps received.</p>}
+      <ol className="space-y-2">
+        {steps.map((step, index) => (
+          <li key={index}>
+            <strong>{String(step.agent ?? "Assessment step")}</strong> · {String(step.status ?? "Unknown")}
+            <p className="text-sm text-slate-400">{String(step.summary ?? "")}</p>
+          </li>
+        ))}
+      </ol>
+    </section>
   );
 }
 
-
-
-/* ── Sparkline ────────────────────────────────────────────────────────────── */
-function Sparkline({ data, color }: { data: number[]; color: string }) {
-  const pts = data.map((v, i) => ({ i, v }));
-  return (
-    <ResponsiveContainer width="100%" height={36}>
-      <LineChart data={pts}>
-        <Line type="monotone" dataKey="v" stroke={color} strokeWidth={1.5} dot={false} />
-      </LineChart>
-    </ResponsiveContainer>
-  );
-}
-
-/* ── Main Content ─────────────────────────────────────────────────────────── */
 function SatelliteIntelContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -214,39 +127,17 @@ function SatelliteIntelContent() {
   const [noradId, setNoradId] = useState(satelliteIdParam || "");
   const [selectedSat, setSelectedSat] = useState<SatelliteSummary | null>(null);
   const [loading, setLoading] = useState(false);
-  const [loadingStep, setLoadingStep] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [assessment, setAssessment] = useState<AssessmentPayload | null>(null);
   const [activeTab, setActiveTab] = useState<AssessmentTab>("risk");
-  const [timelineActive, setTimelineActive] = useState(false);
 
   const runAssessment = async (idToAssess: string) => {
     setLoading(true);
     setError(null);
     setAssessment(null);
-    setTimelineActive(false);
-
-    const stages = [
-      "Supervisor: Dispatching agents...",
-      "Orbital: Analyzing TLE coefficients...",
-      "Collision: Evaluating debris density clusters...",
-      "Compliance: Querying ESA/IADC RAG vectors...",
-      "Sustainability: Computing ecological footprint...",
-      "Forecast: Propagating 25-year trajectory...",
-      "Mitigation: Synthesizing avoidance strategies...",
-      "Documentation: Compiling executive brief...",
-    ];
-
-    let stageIdx = 0;
-    setLoadingStep(stages[0]);
-    const timer = setInterval(() => {
-      stageIdx++;
-      if (stageIdx < stages.length) setLoadingStep(stages[stageIdx]);
-    }, 1100);
 
     try {
       const result = await assessNorad(idToAssess);
-      clearInterval(timer);
       if (result.errors && result.errors.length > 0) throw new Error(result.errors[0]);
       setAssessment(result);
       setSelectedSat({
@@ -258,13 +149,10 @@ function SatelliteIntelContent() {
         risk_score: sectionNumber(result.collision_analysis, ["risk_score"]),
         risk_level: sectionString(result.collision_analysis, ["risk_level"], "UNKNOWN"),
       });
-      setTimelineActive(true);
     } catch (err: unknown) {
-      clearInterval(timer);
       setError(err instanceof Error ? err.message : `Assessment failed for NORAD ${idToAssess}.`);
     } finally {
       setLoading(false);
-      setLoadingStep("");
     }
   };
 
@@ -313,15 +201,13 @@ function SatelliteIntelContent() {
       metric: `${((assessment.orbital_analysis as any)?.altitude_km as number) || 0}`,
       unit: "km",
       detail: `${(assessment.orbital_analysis as any)?.orbit_type || "LEO"} · ${calculateVelocity(Number((assessment.orbital_analysis as any)?.altitude_km), String((assessment.orbital_analysis as any)?.orbit_type))}`,
-      spark: [320, 350, 330, 365, 380, 370, 390],
       color: "#00d4ff",
     },
     {
       eyebrow: "Collision Agent",
       metric: `${riskScore}`,
-      unit: "%",
+      unit: "/100",
       detail: `Risk level: ${(assessment.collision_analysis as any)?.overall?.risk_level || "NOMINAL"}`,
-      spark: [20, 35, 28, 45, 40, 55, riskScore],
       color: riskScore >= 75 ? "#ff3366" : riskScore >= 55 ? "#ffb700" : "#00ff9d",
     },
     {
@@ -329,7 +215,6 @@ function SatelliteIntelContent() {
       metric: `${getComplianceGrade(Number((assessment.compliance_analysis as any)?.compliance_score || 50))}`,
       unit: "",
       detail: `${(assessment.compliance_analysis as any)?.compliance_level || "UNKNOWN"} (${(assessment.compliance_analysis as any)?.compliance_score || 50}/100)`,
-      spark: [90, 85, 88, 82, 86, 80, 84],
       color: "#00d4ff",
     },
     {
@@ -337,7 +222,6 @@ function SatelliteIntelContent() {
       metric: `${sustainabilityIndex}`,
       unit: "/100",
       detail: `Burden: ${(assessment.sustainability_analysis as any)?.environmental_burden || 0}/40`,
-      spark: [80, 75, 78, 72, 70, 68, sustainabilityIndex || 70],
       color: "var(--c-nominal)",
     },
   ] : [];
@@ -431,7 +315,7 @@ function SatelliteIntelContent() {
                 EXECUTING MULTI-AGENT GRAPH
               </p>
               <p className="font-data text-[9px] max-w-xs text-center" style={{ color: "var(--t-meta)" }}>
-                {loadingStep}
+                Waiting for assessment results…
               </p>
             </div>
             <div className="w-52 h-px" style={{ background: "rgba(255,255,255,0.06)" }}>
@@ -553,7 +437,7 @@ function SatelliteIntelContent() {
       {!loading && assessment && (
         <>
           {/* Agent Timeline */}
-          <AgentTimeline active={timelineActive} />
+          <AgentTimeline steps={assessment?.agent_timeline ?? []} />
 
           {/* 4 Agent Metric Cards — instrument-panel style */}
           <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
@@ -579,7 +463,6 @@ function SatelliteIntelContent() {
                 <p className="font-data text-[8px] uppercase tracking-widest mb-2" style={{ color: "var(--t-meta)" }}>
                   {card.detail}
                 </p>
-                <Sparkline data={card.spark} color={card.color} />
               </motion.div>
             ))}
           </div>
@@ -706,7 +589,7 @@ function SatelliteIntelContent() {
                     <div className="flex flex-col gap-4">
                       <div className="flex items-center justify-between">
                         <h3 className="text-sm font-semibold uppercase tracking-wider text-white">25-Year Risk Propagation</h3>
-                        <span className="font-digital text-xs text-slate-400">Decay est: {assessment.forecast?.decay_estimate_years as number || 0}y</span>
+                        <span className="font-digital text-xs text-slate-400">{String(assessment.forecast?.collision_probability_status ?? "")}</span>
                       </div>
                       <div className="h-[180px]">
                         <ResponsiveContainer width="100%" height="100%">
