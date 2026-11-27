@@ -12,6 +12,7 @@ python-dotenv==1.0.1
 # ── Data ──────────────────────────────────────────────────────────────────────
 requests==2.32.3
 sgp4==2.27
+skyfield==1.55
 pandas==2.2.3
 numpy>=1.26.0
 
@@ -26,3 +27,6 @@ langgraph==0.2.60
 groq==0.13.0
 email-validator==2.3.0
 python-multipart==0.0.20
+defusedxml==0.7.1
+reportlab==5.1.2
+pypdf==7.2.0

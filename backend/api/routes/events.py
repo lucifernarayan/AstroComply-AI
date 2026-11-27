@@ -2,12 +2,13 @@ from datetime import datetime
 import hashlib
 import json
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File
+from fastapi.responses import Response
 from pydantic import AwareDatetime, BaseModel, Field
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 from backend.database.db import engine
 from backend.security.auth import membership, require_role, audit
-from backend.ingestion.cdm import parse_cdm_kvn, CDMValidationError
+from backend.ingestion.cdm import parse_cdm_kvn, parse_cdm_xml, CDMValidationError, PARSER_VERSION
 
 router = APIRouter()
 WRITERS = {'owner','administrator','operator'}
@@ -33,12 +34,17 @@ async def upload_cdm(organization_id: int, file: UploadFile = File(...), member:
     if len(content) > 1_000_000:
         raise HTTPException(413, 'CDM exceeds 1 MB')
     try:
-        parsed = parse_cdm_kvn(content.decode('utf-8'))
+        decoded = content.decode('utf-8-sig')
+        if decoded.lstrip().startswith('<'):
+            parsed, format_name, media_type = parse_cdm_xml(decoded), 'CCSDS CDM XML', 'application/xml'
+        else:
+            parsed, format_name, media_type = parse_cdm_kvn(decoded), 'CCSDS CDM KVN', 'text/plain'
     except (UnicodeDecodeError, CDMValidationError) as error:
         raise HTTPException(422, str(error))
     identifiers = [item['OBJECT_DESIGNATOR'] for item in parsed['objects']]
     norad_ids = [int(identifier) if identifier.isdecimal() else None for identifier in identifiers]
-    raw = {'format': 'CCSDS CDM KVN', 'sha256': hashlib.sha256(content).hexdigest(),
+    raw = {'format': format_name, 'parser_version': PARSER_VERSION,
+           'sha256': hashlib.sha256(content).hexdigest(),
            'filename': file.filename, 'fields': parsed | {'tca': parsed['tca'].isoformat()},
            'object_identifiers': identifiers}
     with engine.begin() as connection:
@@ -81,6 +87,12 @@ async def upload_cdm(organization_id: int, file: UploadFile = File(...), member:
             VALUES (:org,:event,:version,:sha,CAST(:raw AS jsonb))'''),
             {'org': organization_id, 'event': event_id, 'version': version,
              'sha': raw['sha256'], 'raw': json.dumps(raw)})
+        connection.execute(text('''INSERT INTO cdm_source_files
+            (event_id,version_number,organization_id,content,filename,media_type,parser_version)
+            VALUES (:event,:version,:org,:content,:filename,:media,:parser)'''),
+            {'event': event_id, 'version': version, 'org': organization_id,
+             'content': content, 'filename': file.filename, 'media': media_type,
+             'parser': PARSER_VERSION})
         audit(connection, member, action, 'conjunction_event', event_id)
     return {'id': event_id, 'version': version, 'source': parsed['source'], 'external_id': parsed['external_id'],
             'probability_status': 'Insufficient data for reliable probability-of-collision estimation.'}
@@ -136,6 +148,20 @@ def list_event_versions(organization_id: int, event_id: int, member: dict = Depe
             FROM conjunction_event_versions WHERE organization_id=:org AND event_id=:id
             ORDER BY version_number DESC'''), {'org': organization_id, 'id': event_id}).mappings()
         return [dict(row) for row in rows]
+
+
+@router.get('/{organization_id}/events/{event_id}/versions/{version_number}/source')
+def download_cdm_source(organization_id: int, event_id: int, version_number: int,
+                        member: dict = Depends(membership)):
+    with engine.connect() as connection:
+        row = connection.execute(text('''SELECT content,filename,media_type FROM cdm_source_files
+            WHERE organization_id=:org AND event_id=:event AND version_number=:version'''),
+            {'org': organization_id, 'event': event_id, 'version': version_number}).mappings().first()
+    if not row:
+        raise HTTPException(404, 'CDM source not found')
+    filename = (row['filename'] or 'source.cdm').replace('"', '').replace('\r', '').replace('\n', '')
+    return Response(bytes(row['content']), media_type=row['media_type'],
+                    headers={'Content-Disposition': f'attachment; filename="{filename}"'})
 
 @router.patch('/{organization_id}/events/{event_id}')
 def update_event(organization_id: int, event_id: int, payload: EventUpdate, member: dict = Depends(membership)):

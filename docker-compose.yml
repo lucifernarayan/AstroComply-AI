@@ -19,6 +19,9 @@ services:
       - ./backend/database/migrations/003_investigations.sql:/docker-entrypoint-initdb.d/04-investigations.sql:ro
       - ./backend/database/migrations/004_event_versions.sql:/docker-entrypoint-initdb.d/05-event-versions.sql:ro
       - ./backend/database/migrations/005_worker_heartbeat.sql:/docker-entrypoint-initdb.d/06-worker-heartbeat.sql:ro
+      - ./backend/database/migrations/006_orbital_elements.sql:/docker-entrypoint-initdb.d/07-orbital-elements.sql:ro
+      - ./backend/database/migrations/007_cdm_source_files.sql:/docker-entrypoint-initdb.d/08-cdm-sources.sql:ro
+      - ./backend/database/migrations/008_investigation_workflows.sql:/docker-entrypoint-initdb.d/09-workflows.sql:ro
 
   qdrant:
     image: qdrant/qdrant:latest

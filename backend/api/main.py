@@ -6,7 +6,7 @@ from backend.database.catalogue import CatalogueUnavailable, demo_fallback_enabl
 from fastapi.middleware.cors import CORSMiddleware
 from backend.api.routes import satellites, metrics, analysis, health, regulations, uipath
 from backend.api.routes import assess
-from backend.api.routes import propagation, auth, workspaces, events, investigations, reports
+from backend.api.routes import propagation, auth, workspaces, events, investigations, reports, orbital_assets
 
 app = FastAPI(
     title="MOSIP API",
@@ -50,6 +50,7 @@ app.include_router(workspaces.router, prefix="/organizations", tags=["Workspaces
 app.include_router(events.router, prefix="/organizations", tags=["Conjunction events"])
 app.include_router(investigations.router, prefix="/organizations", tags=["Investigations"])
 app.include_router(reports.router, prefix="/organizations", tags=["Workspace reports"])
+app.include_router(orbital_assets.router, prefix="/organizations", tags=["Fleet orbital elements"])
 app.include_router(health.router,     tags=["Health"])
 app.include_router(satellites.router, prefix="/satellites", tags=["Satellites"])
 app.include_router(analysis.router,   prefix="/analyze",    tags=["Analysis"])

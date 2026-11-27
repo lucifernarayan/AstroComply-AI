@@ -1,9 +1,44 @@
 """Bounded CCSDS 508.0-B-1 KVN reader for core conjunction fields."""
 from datetime import datetime, timezone
 from math import isfinite
+from defusedxml import ElementTree as SafeET
+
+PARSER_VERSION = 'cdm-core-2'
 
 class CDMValidationError(ValueError):
     pass
+
+
+def _validated(header: dict, objects: list[dict]) -> dict:
+    for key in ('CCSDS_CDM_VERS', 'CREATION_DATE', 'ORIGINATOR', 'MESSAGE_ID', 'TCA', 'MISS_DISTANCE'):
+        if key not in header or not str(header[key]).strip():
+            raise CDMValidationError(f'Missing required {key}')
+    if len(objects) != 2 or {item.get('OBJECT') for item in objects} != {'OBJECT1', 'OBJECT2'}:
+        raise CDMValidationError('Expected OBJECT1 and OBJECT2 sections')
+    objects = sorted(objects, key=lambda item: item['OBJECT'])
+    for item in objects:
+        if not item.get('OBJECT_DESIGNATOR'):
+            raise CDMValidationError(f'Missing OBJECT_DESIGNATOR for {item["OBJECT"]}')
+    try:
+        tca = datetime.fromisoformat(header['TCA'].replace('Z', '+00:00'))
+        created = datetime.fromisoformat(header['CREATION_DATE'].replace('Z', '+00:00'))
+        if tca.tzinfo is None or created.tzinfo is None:
+            raise ValueError('UTC offset required')
+        miss = float(header['MISS_DISTANCE'])
+        speed = float(header['RELATIVE_SPEED']) if 'RELATIVE_SPEED' in header else None
+        if not isfinite(miss) or miss < 0 or (speed is not None and (not isfinite(speed) or speed < 0)):
+            raise ValueError('Invalid distance or speed')
+    except ValueError as error:
+        raise CDMValidationError(f'Invalid timestamp or measurement: {error}') from error
+    return {
+        'source': header['ORIGINATOR'], 'external_id': header['MESSAGE_ID'],
+        'created_at': created.astimezone(timezone.utc).isoformat(),
+        'tca': tca.astimezone(timezone.utc), 'miss_distance_m': miss,
+        'relative_speed_m_s': speed,
+        'objects': objects, 'version': header['CCSDS_CDM_VERS'],
+        'covariance_present': all(any(key.startswith('COVARIANCE') or key in ('CR_R', 'CT_T', 'CN_N') for key in item) for item in objects),
+        'provider_collision_probability': header.get('COLLISION_PROBABILITY'),
+    }
 
 
 def parse_cdm_kvn(content: str) -> dict:
@@ -35,31 +70,51 @@ def parse_cdm_kvn(content: str) -> dict:
             if key in current:
                 raise CDMValidationError(f'Duplicate {key} for {current["OBJECT"]}')
             current[key] = value
-    for key in ('CCSDS_CDM_VERS', 'CREATION_DATE', 'ORIGINATOR', 'MESSAGE_ID', 'TCA', 'MISS_DISTANCE'):
-        if key not in header:
-            raise CDMValidationError(f'Missing required {key}')
-    if len(objects) != 2 or {item['OBJECT'] for item in objects} != {'OBJECT1', 'OBJECT2'}:
-        raise CDMValidationError('Expected OBJECT1 and OBJECT2 sections')
-    for item in objects:
-        if not item.get('OBJECT_DESIGNATOR'):
-            raise CDMValidationError(f'Missing OBJECT_DESIGNATOR for {item["OBJECT"]}')
+    return _validated(header, objects)
+
+
+def parse_cdm_xml(content: str) -> dict:
+    if len(content.encode('utf-8')) > 1_000_000:
+        raise CDMValidationError('CDM exceeds 1 MB')
     try:
-        tca = datetime.fromisoformat(header['TCA'].replace('Z', '+00:00'))
-        created = datetime.fromisoformat(header['CREATION_DATE'].replace('Z', '+00:00'))
-        if tca.tzinfo is None or created.tzinfo is None:
-            raise ValueError('UTC offset required')
-        miss = float(header['MISS_DISTANCE'])
-        speed = float(header['RELATIVE_SPEED']) if 'RELATIVE_SPEED' in header else None
-        if not isfinite(miss) or miss < 0 or (speed is not None and (not isfinite(speed) or speed < 0)):
-            raise ValueError('Invalid distance or speed')
-    except ValueError as error:
-        raise CDMValidationError(f'Invalid timestamp or measurement: {error}') from error
-    return {
-        'source': header['ORIGINATOR'], 'external_id': header['MESSAGE_ID'],
-        'created_at': created.astimezone(timezone.utc).isoformat(),
-        'tca': tca.astimezone(timezone.utc), 'miss_distance_m': miss,
-        'relative_speed_m_s': speed,
-        'objects': objects, 'version': header['CCSDS_CDM_VERS'],
-        'covariance_present': all(any(key.startswith('COVARIANCE') or key in ('CR_R', 'CT_T', 'CN_N') for key in item) for item in objects),
-        'provider_collision_probability': header.get('COLLISION_PROBABILITY'),
-    }
+        root = SafeET.fromstring(content)
+    except (SafeET.ParseError, ValueError) as error:
+        raise CDMValidationError(f'Invalid CDM XML: {error}') from error
+
+    def name(element):
+        return element.tag.rsplit('}', 1)[-1]
+
+    def child(element, expected):
+        matches = [item for item in element if name(item) == expected]
+        if len(matches) != 1:
+            raise CDMValidationError(f'Expected one {expected} XML element')
+        return matches[0]
+
+    def values(element):
+        return {name(item): (item.text or '').strip() for item in element if len(item) == 0}
+
+    if name(root) != 'cdm':
+        raise CDMValidationError('Expected cdm XML root')
+    header = values(child(root, 'header'))
+    header['CCSDS_CDM_VERS'] = root.get('version', '')
+    body = child(root, 'body')
+    relative = child(body, 'relativeMetadataData')
+    header.update(values(relative))
+    segments = [item for item in body if name(item) == 'segment']
+    if len(segments) != 2:
+        raise CDMValidationError('Expected two XML segment elements')
+    objects = []
+    for segment in segments:
+        metadata = values(child(segment, 'metadata'))
+        data = child(segment, 'data')
+        covariance = {}
+        for item in data.iter():
+            if name(item) in ('covarianceMatrix', 'covariance'):
+                covariance = values(item)
+                break
+        if covariance:
+            metadata['COVARIANCE_MATRIX'] = covariance
+        objects.append(metadata)
+    result = _validated(header, objects)
+    result['xml_units'] = {name(item): dict(item.attrib) for item in relative if item.attrib}
+    return result
