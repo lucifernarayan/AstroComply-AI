@@ -1,6 +1,6 @@
 # Application architecture
 
-The Next.js App Router frontend calls a FastAPI process over HTTP through frontend/src/utils/api.ts. Catalog and metric routes use SQLAlchemy against PostgreSQL. SatelliteService combines repository results with deterministic element and heuristic risk functions. The assess router invokes a fixed LangGraph pipeline. The regulation search service reads local JSON chunks, and selected agents use Groq to interpret results. UiPath simulator jobs run as FastAPI background tasks with process-local state.
+The Next.js App Router frontend calls a FastAPI process over HTTP. Catalog and metric routes use SQLAlchemy against PostgreSQL. Workspace routes use database-backed sessions, organization memberships and scoped fleet records. SatelliteService combines repository results with deterministic element and heuristic risk functions. The assess router invokes a fixed LangGraph pipeline. The regulation search service reads local JSON chunks, and selected agents use Groq to interpret results. UiPath simulator jobs run as FastAPI background tasks with process-local state.
 
 ## Target pilot architecture
 
